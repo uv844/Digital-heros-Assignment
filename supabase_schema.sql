@@ -65,6 +65,7 @@ ALTER TABLE winners ENABLE ROW LEVEL SECURITY;
 -- User Profiles Policies
 CREATE POLICY "Users can view their own profile" ON user_profiles FOR SELECT USING (auth.uid() = uid);
 CREATE POLICY "Users can update their own profile" ON user_profiles FOR UPDATE USING (auth.uid() = uid);
+CREATE POLICY "Users can insert their own profile" ON user_profiles FOR INSERT WITH CHECK (auth.uid() = uid);
 
 -- Golf Scores Policies
 CREATE POLICY "Users can view their own scores" ON golf_scores FOR SELECT USING (auth.uid() = uid);

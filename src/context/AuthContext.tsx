@@ -64,6 +64,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
+  const mapProfile = (data: any): UserProfile => ({
+    uid: data.uid,
+    email: data.email,
+    displayName: data.display_name,
+    photoURL: data.photo_url,
+    role: data.role,
+    subscriptionStatus: data.subscription_status,
+    renewalDate: data.renewal_date,
+    selectedCharityId: data.selected_charity_id,
+    charityContributionPercentage: data.charity_contribution_percentage,
+    totalWinnings: Number(data.total_winnings) || 0,
+  });
+
   const fetchProfile = async (uid: string) => {
     try {
       const { data, error } = await supabase
@@ -72,24 +85,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('uid', uid)
         .single();
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching profile:', error);
         setProfile(null);
+        return;
+      }
+
+      if (!data) {
+        // Get user from auth to get email and metadata
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        
+        // Create profile if it doesn't exist (e.g. for OAuth users)
+        const { data: newData, error: createError } = await supabase
+          .from('user_profiles')
+          .insert({
+            uid: uid,
+            email: authUser?.email || '',
+            display_name: authUser?.user_metadata?.display_name || authUser?.user_metadata?.full_name || 'Hero',
+            role: UserRole.USER,
+            subscription_status: 'inactive',
+            total_winnings: 0,
+            charity_contribution_percentage: 10,
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Error creating profile:', createError);
+          setProfile(null);
+        } else {
+          setProfile(mapProfile(newData));
+        }
       } else {
-        // Map snake_case from DB to camelCase for the app
-        const mappedProfile: UserProfile = {
-          uid: data.uid,
-          email: data.email,
-          displayName: data.display_name,
-          photoURL: data.photo_url,
-          role: data.role,
-          subscriptionStatus: data.subscription_status,
-          renewalDate: data.renewal_date,
-          selectedCharityId: data.selected_charity_id,
-          charityContributionPercentage: data.charity_contribution_percentage,
-          totalWinnings: Number(data.total_winnings) || 0,
-        };
-        setProfile(mappedProfile);
+        setProfile(mapProfile(data));
       }
     } catch (err) {
       console.error('Unexpected error fetching profile:', err);
