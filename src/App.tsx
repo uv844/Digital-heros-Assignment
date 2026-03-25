@@ -21,15 +21,55 @@ import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  const { user, loading: authLoading } = useAuth();
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!authLoading) {
+      setLoading(false);
+    } else {
+      // Safety timeout: if auth is still loading after 8 seconds, force stop
+      const timer = setTimeout(() => {
+        console.warn('Auth loading timed out after 8s. Forcing stop.');
+        setLoading(false);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading]);
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white">
+    <div className="flex flex-col items-center space-y-4">
+      <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin" />
+      <div className="text-sm font-bold uppercase tracking-widest text-gray-400">Loading...</div>
+    </div>
+  </div>;
   if (!user) return <Navigate to="/login" />;
   return <>{children}</>;
 };
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isAdmin, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  const { user, isAdmin, loading: authLoading } = useAuth();
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!authLoading) {
+      setLoading(false);
+    } else {
+      // Safety timeout
+      const timer = setTimeout(() => {
+        console.warn('Admin auth loading timed out after 8s. Forcing stop.');
+        setLoading(false);
+      }, 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [authLoading]);
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white">
+    <div className="flex flex-col items-center space-y-4">
+      <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin" />
+      <div className="text-sm font-bold uppercase tracking-widest text-gray-400">Loading...</div>
+    </div>
+  </div>;
   if (!user) return <Navigate to="/login" />;
   if (!isAdmin) return <Navigate to="/dashboard" />;
   return <>{children}</>;

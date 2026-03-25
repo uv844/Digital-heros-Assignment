@@ -21,6 +21,7 @@ const supabaseAdmin = createClient(
 const app = express();
 const PORT = 3000;
 
+app.set('trust proxy', true);
 app.use(cors());
 
 // Health check
@@ -113,13 +114,41 @@ app.post('/api/create-checkout-session', async (req, res) => {
         .eq('uid', userId);
     }
 
+    const referer = req.get('referer');
+    let origin = req.headers.origin as string;
+    
+    if (!origin && referer) {
+      try {
+        origin = new URL(referer).origin;
+      } catch (e) {
+        // Ignore URL parsing errors
+      }
+    }
+    
+    if (!origin) {
+      origin = `${req.protocol}://${req.get('host')}`;
+    }
+
+    let appUrl = process.env.APP_URL || origin;
+    
+    // Ensure appUrl is an absolute URL with a scheme
+    if (appUrl && !appUrl.startsWith('http')) {
+      // If it's a relative path, prepend the origin
+      if (appUrl.startsWith('/')) {
+        appUrl = `${origin}${appUrl}`;
+      } else {
+        // Otherwise assume https
+        appUrl = `https://${appUrl}`;
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: `${process.env.APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.APP_URL}/signup`,
+      success_url: `${appUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${appUrl}/signup`,
       metadata: { userId },
     });
 

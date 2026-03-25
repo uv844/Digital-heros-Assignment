@@ -25,28 +25,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     const initAuth = async () => {
       try {
-        // Check current session
+        console.log('Initializing Auth...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
           console.error('Session error:', sessionError);
-          setLoading(false);
+          if (mounted) setLoading(false);
           return;
         }
 
         if (session?.user) {
+          console.log('Session found for user:', session.user.id);
           setUser(session.user);
           await fetchProfile(session.user.id);
         } else {
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
+          console.log('No session found');
+          if (mounted) {
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          }
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
@@ -54,29 +60,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id);
       const currentUser = session?.user ?? null;
       
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setUser(currentUser);
+        if (mounted) setUser(currentUser);
         if (currentUser) {
           await fetchProfile(currentUser.id);
         }
       } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-      } else if (event === 'INITIAL_SESSION') {
-        // Handled by initAuth, but good to have as fallback
-        if (currentUser) {
-          setUser(currentUser);
-          await fetchProfile(currentUser.id);
-        } else {
+        if (mounted) {
+          setUser(null);
+          setProfile(null);
           setLoading(false);
         }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const mapProfile = (data: any): UserProfile => ({
@@ -94,28 +98,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const fetchProfile = async (uid: string) => {
+    if (!uid) return;
+    
+    console.log('fetchProfile starting for:', uid);
     setLoading(true);
+    
     try {
-      console.log('Fetching profile for:', uid);
       // Retry logic for profile fetching (useful if trigger is still running)
       let retries = 3;
       let data = null;
       let error = null;
 
       while (retries > 0) {
+        console.log(`Attempting to fetch profile for ${uid}, retries left: ${retries}`);
         const result = await supabase
           .from('user_profiles')
           .select('*')
           .eq('uid', uid)
-          .maybeSingle(); // Use maybeSingle to avoid PGRST116 error logging
+          .maybeSingle();
         
         data = result.data;
         error = result.error;
 
         if (data || (error && error.code !== 'PGRST116')) break;
         
-        console.log(`Profile not found, retrying... (${retries} left)`);
-        // Wait a bit before retrying
+        console.log(`Profile not found, retrying in 1s...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
         retries--;
       }
@@ -123,10 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching profile:', error);
         setProfile(null);
-        return;
-      }
-
-      if (!data) {
+      } else if (!data) {
         console.warn('Profile not found after retries. Attempting manual creation...');
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) {
@@ -162,13 +166,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await supabase.auth.signOut();
           setUser(null);
           setProfile(null);
-          return;
+        } else {
+          setProfile(mappedProfile);
         }
-        setProfile(mappedProfile);
       }
     } catch (err) {
       console.error('Unexpected error fetching profile:', err);
     } finally {
+      console.log('fetchProfile finished, setting loading to false');
       setLoading(false);
     }
   };
