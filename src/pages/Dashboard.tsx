@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import ScoreEntry from '../components/ScoreEntry';
 import SubscriptionCard from '../components/SubscriptionCard';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Heart, Users, ArrowUpRight, Wallet, X, Check, User as UserIcon } from 'lucide-react';
+import { Trophy, Heart, Users, ArrowUpRight, Wallet, X, Check, User as UserIcon, PartyPopper } from 'lucide-react';
 import { MOCK_CHARITIES } from '../constants';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import PricingModal from '../components/PricingModal';
 import { useSearchParams } from 'react-router-dom';
 import { SubscriptionStatus } from '../types';
+import confetti from 'canvas-confetti';
 
 const Dashboard: React.FC = () => {
   const { profile, refreshProfile } = useAuth();
@@ -18,14 +19,14 @@ const Dashboard: React.FC = () => {
   const [showCharityModal, setShowCharityModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showPricingModal, setShowPricingModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   const [charities, setCharities] = useState<any[]>([]);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
-    if (showHistoryModal) {
-      fetchHistory();
-    }
-  }, [showHistoryModal]);
+    fetchHistory();
+  }, [profile]);
 
   useEffect(() => {
     fetchCharities();
@@ -38,12 +39,72 @@ const Dashboard: React.FC = () => {
     }
 
     // Handle session_id from Stripe success
-    if (searchParams.get('session_id')) {
-      toast.success('Subscription successful! Welcome to the club.');
-      searchParams.delete('session_id');
-      setSearchParams(searchParams);
+    const sessionId = searchParams.get('session_id');
+    if (sessionId) {
+      handleStripeSuccess(sessionId);
     }
   }, [profile, searchParams, setSearchParams]);
+
+  const [pendingWinnings, setPendingWinnings] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (profile) {
+      fetchPendingWinnings();
+    }
+  }, [profile]);
+
+  const fetchPendingWinnings = async () => {
+    if (!profile) return;
+    const { data, error } = await supabase
+      .from('winners')
+      .select('*, draws(*)')
+      .eq('uid', profile.uid)
+      .eq('status', 'pending');
+    
+    if (!error && data) {
+      setPendingWinnings(data);
+    }
+  };
+
+  const handleStripeSuccess = async (sessionId: string) => {
+    if (verifying) return;
+    setVerifying(true);
+    
+    try {
+      // Force a manual verification to update status immediately
+      const response = await fetch('/api/verify-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'updated' || profile?.subscriptionStatus === 'active') {
+        // Trigger confetti
+        confetti({
+          particleCount: 150,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#000000', '#ffffff', '#FFD700']
+        });
+        
+        setShowSuccessModal(true);
+        await refreshProfile();
+      } else {
+        toast.info('Subscription is being processed. It will update shortly.');
+      }
+      
+      // Clear URL params
+      searchParams.delete('session_id');
+      setSearchParams(searchParams);
+    } catch (error) {
+      console.error('Verification error:', error);
+      toast.error('Failed to verify subscription status');
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const fetchCharities = async () => {
     const { data, error } = await supabase
@@ -116,6 +177,33 @@ const Dashboard: React.FC = () => {
         </motion.div>
       </header>
 
+      {pendingWinnings.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mb-12 p-8 bg-black text-white rounded-[40px] relative overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="flex items-center space-x-6">
+              <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center shrink-0">
+                <PartyPopper size={40} className="text-yellow-400" />
+              </div>
+              <div>
+                <h2 className="text-3xl font-bold mb-2">Congratulations!</h2>
+                <p className="text-white/60">You've won a prize in a recent draw. Check your history to claim it.</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowHistoryModal(true)}
+              className="px-8 py-4 bg-white text-black font-bold rounded-2xl hover:bg-gray-100 transition-all"
+            >
+              View Winnings
+            </button>
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
         <div className="lg:col-span-1">
           <SubscriptionCard />
@@ -135,7 +223,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div className="flex-1">
                   <div className="text-4xl font-bold mb-1">${profile?.totalWinnings?.toLocaleString() || '0'}</div>
-                  <p className="text-white/40 text-sm">Across 0 winning draws</p>
+                  <p className="text-white/40 text-sm">Across {history.length} winning draws</p>
                 </div>
                 <button 
                   onClick={() => setShowHistoryModal(true)}
@@ -272,6 +360,41 @@ const Dashboard: React.FC = () => {
         onClose={() => setShowPricingModal(false)} 
         showSkip={true}
       />
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSuccessModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden p-10 text-center"
+            >
+              <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8">
+                <PartyPopper size={48} />
+              </div>
+              <h3 className="text-3xl font-black tracking-tight mb-4">Congratulations!</h3>
+              <p className="text-gray-500 mb-10 leading-relaxed">
+                You are now a **Digital Hero**. Your subscription is active, and you've been entered into the next monthly draw!
+              </p>
+              <button 
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full py-5 bg-black text-white font-bold rounded-2xl hover:bg-gray-800 transition-all shadow-lg shadow-black/10"
+              >
+                Let's Go!
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* History Modal */}
       <AnimatePresence>

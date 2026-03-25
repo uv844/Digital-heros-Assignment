@@ -10,7 +10,7 @@ export const PRIZE_POOL_SHARES = {
 
 export const MOCK_CHARITIES = [
   {
-    id: 'charity-1',
+    id: '00000000-0000-0000-0000-000000000001',
     name: 'Green Fairways Foundation',
     description: 'Supporting youth golf programs in underprivileged communities.',
     imageURL: 'https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&q=80&w=800',
@@ -19,7 +19,7 @@ export const MOCK_CHARITIES = [
     ]
   },
   {
-    id: 'charity-2',
+    id: '00000000-0000-0000-0000-000000000002',
     name: 'Golfers for Good',
     description: 'Providing clean water solutions through golf tournament fundraising.',
     imageURL: 'https://images.unsplash.com/photo-1535131749006-b7f58c99034b?auto=format&fit=crop&q=80&w=800',

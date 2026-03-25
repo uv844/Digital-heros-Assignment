@@ -66,6 +66,10 @@ const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose, showSkip =
     }
   };
 
+  const monthlyPrice = 20;
+  const yearlyPrice = 200;
+  const discountPercent = Math.round((1 - (yearlyPrice / (monthlyPrice * 12))) * 100);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -148,7 +152,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose, showSkip =
                 >
                   Yearly
                   <span className="absolute -top-2 -right-2 px-2 py-1 bg-green-100 text-green-700 text-[8px] font-black uppercase rounded-full tracking-tighter">
-                    Save 20%
+                    Save {discountPercent}%
                   </span>
                 </button>
               </div>

@@ -19,23 +19,26 @@ import Charities from './pages/Charities';
 import HowItWorks from './pages/HowItWorks';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
+import Draws from './pages/Draws';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    console.log('ProtectedRoute: authLoading =', authLoading, 'user =', !!user);
     if (!authLoading) {
+      console.log('ProtectedRoute: Auth finished loading, setting local loading to false');
       setLoading(false);
     } else {
-      // Safety timeout: if auth is still loading after 8 seconds, force stop
+      // Safety timeout: if auth is still loading after 4 seconds, force stop
       const timer = setTimeout(() => {
-        console.warn('Auth loading timed out after 8s. Forcing stop.');
+        console.warn('ProtectedRoute: Auth loading timed out after 4s. Forcing stop.');
         setLoading(false);
-      }, 8000);
+      }, 4000);
       return () => clearTimeout(timer);
     }
-  }, [authLoading]);
+  }, [authLoading, user]);
 
   if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
     <div className="flex flex-col items-center space-y-4 text-center">
@@ -61,17 +64,19 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
+    console.log('AdminRoute: authLoading =', authLoading, 'user =', !!user, 'isAdmin =', isAdmin);
     if (!authLoading) {
+      console.log('AdminRoute: Auth finished loading, setting local loading to false');
       setLoading(false);
     } else {
-      // Safety timeout
+      // Safety timeout: if auth is still loading after 4 seconds, force stop
       const timer = setTimeout(() => {
-        console.warn('Admin auth loading timed out after 8s. Forcing stop.');
+        console.warn('AdminRoute: Auth loading timed out after 4s. Forcing stop.');
         setLoading(false);
-      }, 8000);
+      }, 4000);
       return () => clearTimeout(timer);
     }
-  }, [authLoading]);
+  }, [authLoading, user, isAdmin]);
 
   if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
     <div className="flex flex-col items-center space-y-4 text-center">
@@ -131,6 +136,7 @@ export default function App() {
               <Route path="how-it-works" element={<HowItWorks />} />
               <Route path="privacy" element={<Privacy />} />
               <Route path="terms" element={<Terms />} />
+              <Route path="draws" element={<Draws />} />
               
               <Route path="dashboard" element={
                 <ProtectedRoute>

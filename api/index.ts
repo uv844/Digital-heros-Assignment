@@ -158,6 +158,37 @@ app.post('/api/create-checkout-session', async (req, res) => {
   }
 });
 
+app.post('/api/verify-session', async (req, res) => {
+  const { sessionId } = req.body;
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (session.payment_status === 'paid' && session.subscription) {
+      const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+      const customerId = session.customer as string;
+      const status = subscription.status;
+      const renewalDate = new Date((subscription as any).current_period_end * 1000).toISOString();
+      const userId = session.metadata?.userId;
+
+      if (userId) {
+        await supabaseAdmin
+          .from('user_profiles')
+          .update({
+            subscription_status: status === 'active' ? 'active' : 'inactive',
+            renewal_date: renewalDate,
+          })
+          .eq('uid', userId);
+        
+        return res.json({ status: 'updated', subscriptionStatus: status === 'active' ? 'active' : 'inactive' });
+      }
+    }
+    res.json({ status: 'no_change' });
+  } catch (error: any) {
+    console.error('Verify session error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Vite / Static files
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(process.cwd(), 'dist');

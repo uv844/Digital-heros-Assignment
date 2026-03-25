@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Charity } from '../types';
 import { motion } from 'motion/react';
-import { Plus, Trash2, Edit2, Save, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Image as ImageIcon, Database } from 'lucide-react';
 import { toast } from 'sonner';
+import { MOCK_CHARITIES } from '../constants';
 
 const AdminCharityManager: React.FC = () => {
   const [charities, setCharities] = useState<Charity[]>([]);
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Charity>>({});
   const [isAdding, setIsAdding] = useState(false);
@@ -26,6 +28,31 @@ const AdminCharityManager: React.FC = () => {
       console.error('Error fetching charities:', error);
     } else {
       setCharities(data as Charity[]);
+    }
+  };
+
+  const seedCharities = async () => {
+    setSeeding(true);
+    try {
+      const charitiesToInsert = MOCK_CHARITIES.map(c => ({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        image_url: c.imageURL
+      }));
+
+      const { error } = await supabase
+        .from('charities')
+        .upsert(charitiesToInsert, { onConflict: 'id' });
+
+      if (error) throw error;
+      toast.success('Charities seeded successfully!');
+      fetchCharities();
+    } catch (error: any) {
+      console.error('Error seeding charities:', error);
+      toast.error(error.message || 'Failed to seed charities');
+    } finally {
+      setSeeding(false);
     }
   };
 
@@ -94,13 +121,23 @@ const AdminCharityManager: React.FC = () => {
           <h3 className="text-xl font-bold">Charity Partners</h3>
           <p className="text-sm text-gray-500">Manage charity organizations and their details</p>
         </div>
-        <button 
-          onClick={() => { setIsAdding(true); setEditForm({}); }}
-          className="px-6 py-3 bg-black text-white text-sm font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center"
-        >
-          <Plus className="mr-2" size={18} />
-          Add Charity
-        </button>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={seedCharities}
+            disabled={seeding}
+            className="px-6 py-3 bg-white text-black border border-gray-200 text-sm font-bold rounded-2xl hover:border-black transition-all flex items-center disabled:opacity-50"
+          >
+            <Database className="mr-2" size={18} />
+            {seeding ? 'Seeding...' : 'Seed Charities'}
+          </button>
+          <button 
+            onClick={() => { setIsAdding(true); setEditForm({}); }}
+            className="px-6 py-3 bg-black text-white text-sm font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center"
+          >
+            <Plus className="mr-2" size={18} />
+            Add Charity
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -1,5 +1,5 @@
 -- User Profiles
-CREATE TABLE user_profiles (
+CREATE TABLE IF NOT EXISTS user_profiles (
   uid UUID REFERENCES auth.users NOT NULL PRIMARY KEY,
   email TEXT NOT NULL,
   display_name TEXT,
@@ -16,7 +16,7 @@ CREATE TABLE user_profiles (
 );
 
 -- Golf Scores
-CREATE TABLE golf_scores (
+CREATE TABLE IF NOT EXISTS golf_scores (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   uid UUID REFERENCES auth.users NOT NULL,
   score INTEGER NOT NULL CHECK (score >= 1 AND score <= 45),
@@ -25,7 +25,7 @@ CREATE TABLE golf_scores (
 );
 
 -- Charities
-CREATE TABLE charities (
+CREATE TABLE IF NOT EXISTS charities (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   description TEXT NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE charities (
 );
 
 -- Draws
-CREATE TABLE draws (
+CREATE TABLE IF NOT EXISTS draws (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   date TIMESTAMP WITH TIME ZONE NOT NULL,
   winning_numbers INTEGER[] NOT NULL,
@@ -45,7 +45,7 @@ CREATE TABLE draws (
 );
 
 -- Winners
-CREATE TABLE winners (
+CREATE TABLE IF NOT EXISTS winners (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   draw_id UUID REFERENCES draws NOT NULL,
   uid UUID REFERENCES auth.users NOT NULL,
@@ -75,49 +75,63 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- User Profiles Policies
+DROP POLICY IF EXISTS "Users can view their own profile" ON user_profiles;
 CREATE POLICY "Users can view their own profile" ON user_profiles 
   FOR SELECT USING (auth.uid() = uid AND is_blocked = false);
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON user_profiles;
 CREATE POLICY "Users can update their own profile" ON user_profiles 
   FOR UPDATE USING (auth.uid() = uid AND is_blocked = false);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON user_profiles;
 CREATE POLICY "Users can insert their own profile" ON user_profiles 
   FOR INSERT WITH CHECK (auth.uid() = uid);
 
+DROP POLICY IF EXISTS "Admins can manage all profiles" ON user_profiles;
 CREATE POLICY "Admins can manage all profiles" ON user_profiles 
   FOR ALL USING (public.is_admin());
 
 -- Golf Scores Policies
+DROP POLICY IF EXISTS "Users can view their own scores" ON golf_scores;
 CREATE POLICY "Users can view their own scores" ON golf_scores 
   FOR SELECT USING (auth.uid() = uid AND EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND is_blocked = false));
 
+DROP POLICY IF EXISTS "Users can insert their own scores" ON golf_scores;
 CREATE POLICY "Users can insert their own scores" ON golf_scores 
   FOR INSERT WITH CHECK (auth.uid() = uid AND EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND is_blocked = false));
 
+DROP POLICY IF EXISTS "Users can delete their own scores" ON golf_scores;
 CREATE POLICY "Users can delete their own scores" ON golf_scores 
   FOR DELETE USING (auth.uid() = uid AND EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND is_blocked = false));
 
+DROP POLICY IF EXISTS "Admins can manage all scores" ON golf_scores;
 CREATE POLICY "Admins can manage all scores" ON golf_scores 
   FOR ALL USING (public.is_admin());
 
 -- Charities Policies
+DROP POLICY IF EXISTS "Everyone can view charities" ON charities;
 CREATE POLICY "Everyone can view charities" ON charities 
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Admins can manage charities" ON charities;
 CREATE POLICY "Admins can manage charities" ON charities 
   FOR ALL USING (public.is_admin());
 
 -- Draws Policies
+DROP POLICY IF EXISTS "Everyone can view published draws" ON draws;
 CREATE POLICY "Everyone can view published draws" ON draws 
   FOR SELECT USING (status = 'published');
 
+DROP POLICY IF EXISTS "Admins can manage all draws" ON draws;
 CREATE POLICY "Admins can manage all draws" ON draws 
   FOR ALL USING (public.is_admin());
 
 -- Winners Policies
+DROP POLICY IF EXISTS "Users can view their own winnings" ON winners;
 CREATE POLICY "Users can view their own winnings" ON winners 
   FOR SELECT USING (auth.uid() = uid AND EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND is_blocked = false));
 
+DROP POLICY IF EXISTS "Admins can manage all winners" ON winners;
 CREATE POLICY "Admins can manage all winners" ON winners 
   FOR ALL USING (public.is_admin());
 
@@ -130,7 +144,7 @@ BEGIN
     new.id,
     new.email,
     COALESCE(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'full_name', 'Hero'),
-    CASE WHEN new.email = 'yuvrajch1503@gmail.com' THEN 'admin' ELSE 'user' END,
+    CASE WHEN new.email = 'admin@digitalhero.com' THEN 'admin' ELSE 'user' END,
     'inactive',
     0,
     10
@@ -139,6 +153,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();

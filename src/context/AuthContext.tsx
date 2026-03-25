@@ -24,6 +24,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [fetchingUid, setFetchingUid] = useState<string | null>(null);
+
   useEffect(() => {
     let mounted = true;
 
@@ -34,16 +36,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (sessionError) {
           console.error('Session error:', sessionError);
-          // If refresh token is invalid, sign out to clear local storage
           if (sessionError.message.includes('Refresh Token Not Found') || sessionError.status === 400) {
             console.warn('Invalid session detected, clearing local auth...');
             try {
               await supabase.auth.signOut();
-            } catch (e) {
-              // Ignore signOut errors
-            }
+            } catch (e) {}
             localStorage.clear();
-            window.location.href = '/login';
           }
           if (mounted) setLoading(false);
           return;
@@ -74,10 +72,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Auth state changed:', event, session?.user?.id);
       const currentUser = session?.user ?? null;
       
+      if (mounted) setUser(currentUser);
+
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (mounted) setUser(currentUser);
         if (currentUser) {
           await fetchProfile(currentUser.id);
+        } else {
+          if (mounted) setLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
         if (mounted) {
@@ -85,13 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setProfile(null);
           setLoading(false);
         }
-      } else if (event === 'USER_UPDATED' && !session) {
-        // This can happen if the session is invalidated
-        console.warn('User session invalidated, signing out...');
-        await supabase.auth.signOut();
-        if (mounted) {
-          setUser(null);
-          setProfile(null);
+      } else {
+        // For other events, ensure we aren't stuck in loading if no user
+        if (!currentUser && mounted) {
           setLoading(false);
         }
       }
@@ -118,14 +115,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const fetchProfile = async (uid: string) => {
-    if (!uid) return;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
+
+    // Prevent redundant fetches for the same UID if already loading
+    if (fetchingUid === uid && profile) {
+      console.log('Already have profile for', uid, 'skipping fetch');
+      setLoading(false);
+      return;
+    }
     
     console.log('fetchProfile starting for:', uid);
+    setFetchingUid(uid);
     setLoading(true);
     
     try {
       // Retry logic for profile fetching (useful if trigger is still running)
-      let retries = 3;
+      let retries = 5; // Increased retries
       let data = null;
       let error = null;
 
@@ -153,14 +161,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (!data) {
         console.warn('Profile not found after retries. Attempting manual creation...');
         const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
+        if (authUser && authUser.id === uid) {
           const { data: newProfile, error: insertError } = await supabase
             .from('user_profiles')
             .insert({
               uid: authUser.id,
               email: authUser.email!,
               display_name: authUser.user_metadata?.display_name || authUser.user_metadata?.full_name || 'Hero',
-              role: authUser.email === 'yuvrajch1503@gmail.com' ? 'admin' : 'user',
+              role: authUser.email === 'admin@digitalhero.com' ? 'admin' : 'user',
               subscription_status: 'inactive',
               total_winnings: 0,
               charity_contribution_percentage: 10
@@ -173,10 +181,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setProfile(mapProfile(newProfile));
           } else {
             console.error('Manual profile creation failed:', insertError);
-            setProfile(null);
+            // Don't set profile to null if we already have one from a previous successful fetch
           }
-        } else {
-          setProfile(null);
         }
       } else {
         console.log('Profile fetched successfully:', data);
@@ -195,10 +201,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       console.log('fetchProfile finished, setting loading to false');
       setLoading(false);
+      setFetchingUid(null);
     }
   };
 
-  const isAdmin = profile?.role === UserRole.ADMIN || user?.email === 'yuvrajch1503@gmail.com';
+  const isAdmin = profile?.role === UserRole.ADMIN || user?.email === 'admin@digitalhero.com';
 
   const refreshProfile = async () => {
     if (user) {
