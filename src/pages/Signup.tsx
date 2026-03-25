@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import { motion } from 'motion/react';
 import { Mail, Lock, ArrowRight, Chrome, User } from 'lucide-react';
 import { toast } from 'sonner';
@@ -11,7 +12,14 @@ const Signup: React.FC = () => {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/dashboard');
+    }
+  }, [user, authLoading, navigate]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,25 +31,13 @@ const Signup: React.FC = () => {
         options: {
           data: {
             display_name: displayName,
-          }
+          },
+          emailRedirectTo: window.location.origin + '/dashboard'
         }
       });
 
       if (error) throw error;
       if (!data.user) throw new Error('No user returned');
-
-      // Create user profile in Supabase table
-      const { error: profileError } = await supabase.from('user_profiles').insert({
-        uid: data.user.id,
-        email: data.user.email,
-        display_name: displayName,
-        role: UserRole.USER,
-        subscription_status: SubscriptionStatus.INACTIVE,
-        total_winnings: 0,
-        charity_contribution_percentage: 10,
-      });
-
-      if (profileError) throw profileError;
 
       toast.success('Account created successfully! Please check your email for verification.');
       navigate('/dashboard');

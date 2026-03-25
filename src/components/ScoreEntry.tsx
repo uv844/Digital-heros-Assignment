@@ -25,7 +25,7 @@ const ScoreEntry: React.FC = () => {
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
-        table: 'scores',
+        table: 'golf_scores',
         filter: `uid=eq.${user.id}`
       }, () => {
         fetchScores();
@@ -40,7 +40,7 @@ const ScoreEntry: React.FC = () => {
   const fetchScores = async () => {
     if (!user) return;
     const { data, error } = await supabase
-      .from('scores')
+      .from('golf_scores')
       .select('*')
       .eq('uid', user.id)
       .order('date', { ascending: false })
@@ -70,11 +70,11 @@ const ScoreEntry: React.FC = () => {
       if (scores.length >= 5) {
         const oldestScore = scores[scores.length - 1];
         if (oldestScore.id) {
-          await supabase.from('scores').delete().eq('id', oldestScore.id);
+          await supabase.from('golf_scores').delete().eq('id', oldestScore.id);
         }
       }
 
-      const { error } = await supabase.from('scores').insert({
+      const { error } = await supabase.from('golf_scores').insert({
         uid: user.id,
         score: scoreVal,
         date: new Date().toISOString(),
@@ -95,7 +95,7 @@ const ScoreEntry: React.FC = () => {
 
   const handleDeleteScore = async (id: string) => {
     try {
-      const { error } = await supabase.from('scores').delete().eq('id', id);
+      const { error } = await supabase.from('golf_scores').delete().eq('id', id);
       if (error) throw error;
       toast.success('Score removed');
       fetchScores();

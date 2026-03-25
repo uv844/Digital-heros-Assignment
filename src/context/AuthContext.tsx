@@ -24,23 +24,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
-      const timeout = setTimeout(() => {
-        console.warn('Auth initialization timed out');
-        setLoading(false);
-      }, 5000); // 5 second timeout
-
       try {
         // Check current session
-        const { data: { session } } = await supabase.auth.getSession();
-        clearTimeout(timeout);
-        setUser(session?.user ?? null);
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          setLoading(false);
+          return;
+        }
+
         if (session?.user) {
+          setUser(session.user);
           await fetchProfile(session.user.id);
         } else {
+          setUser(null);
+          setProfile(null);
           setLoading(false);
         }
       } catch (err) {
-        clearTimeout(timeout);
         console.error('Auth initialization error:', err);
         setLoading(false);
       }
@@ -49,15 +51,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
       
-      if (currentUser) {
-        fetchProfile(currentUser.id);
-      } else {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setUser(currentUser);
+        if (currentUser) {
+          await fetchProfile(currentUser.id);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
         setProfile(null);
         setLoading(false);
+      } else if (event === 'INITIAL_SESSION') {
+        // Handled by initAuth, but good to have as fallback
+        if (currentUser) {
+          setUser(currentUser);
+          await fetchProfile(currentUser.id);
+        } else {
+          setLoading(false);
+        }
       }
     });
 
@@ -79,11 +92,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (uid: string) => {
     try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('uid', uid)
-        .single();
+      // Retry logic for profile fetching (useful if trigger is still running)
+      let retries = 3;
+      let data = null;
+      let error = null;
+
+      while (retries > 0) {
+        const result = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('uid', uid)
+          .single();
+        
+        data = result.data;
+        error = result.error;
+
+        if (data || (error && error.code !== 'PGRST116')) break;
+        
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        retries--;
+      }
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching profile:', error);
@@ -92,29 +121,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!data) {
-        // Get user from auth to get email and metadata
-        const { data: { user: authUser } } = await supabase.auth.getUser();
+        // If we reach here, the trigger might be slow or failed.
+        // We wait and retry one last time before giving up.
+        console.warn('Profile not found yet, waiting for trigger...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
         
-        // Create profile if it doesn't exist (e.g. for OAuth users)
-        const { data: newData, error: createError } = await supabase
+        const finalCheck = await supabase
           .from('user_profiles')
-          .insert({
-            uid: uid,
-            email: authUser?.email || '',
-            display_name: authUser?.user_metadata?.display_name || authUser?.user_metadata?.full_name || 'Hero',
-            role: UserRole.USER,
-            subscription_status: 'inactive',
-            total_winnings: 0,
-            charity_contribution_percentage: 10,
-          })
-          .select()
+          .select('*')
+          .eq('uid', uid)
           .single();
-
-        if (createError) {
-          console.error('Error creating profile:', createError);
-          setProfile(null);
+          
+        if (finalCheck.data) {
+          setProfile(mapProfile(finalCheck.data));
         } else {
-          setProfile(mapProfile(newData));
+          console.error('Profile creation failed. Please check Supabase triggers.');
+          setProfile(null);
         }
       } else {
         setProfile(mapProfile(data));

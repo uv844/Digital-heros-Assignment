@@ -104,12 +104,12 @@ const AdminDrawManager: React.FC = () => {
             <div className="flex items-center space-x-8">
               <div>
                 <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Date</div>
-                <div className="text-sm font-bold">{draw.date ? format(draw.date.toDate(), 'MMM dd, yyyy') : 'Pending'}</div>
+                <div className="text-sm font-bold">{draw.date ? format(new Date(draw.date), 'MMM dd, yyyy') : 'Pending'}</div>
               </div>
               <div>
                 <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Winning Numbers</div>
                 <div className="flex space-x-2">
-                  {draw.winningNumbers.map((num, i) => (
+                  {draw.winning_numbers?.map((num, i) => (
                     <div key={i} className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-xs font-bold shadow-sm border border-gray-100">
                       {num}
                     </div>

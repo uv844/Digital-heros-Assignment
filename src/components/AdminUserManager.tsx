@@ -13,8 +13,8 @@ const AdminUserManager: React.FC = () => {
     fetchUsers();
 
     const subscription = supabase
-      .channel('profiles-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+      .channel('user_profiles-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_profiles' }, () => {
         fetchUsers();
       })
       .subscribe();
@@ -26,7 +26,7 @@ const AdminUserManager: React.FC = () => {
 
   const fetchUsers = async () => {
     const { data, error } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .select('*');
 
     if (error) {
@@ -39,7 +39,7 @@ const AdminUserManager: React.FC = () => {
   const toggleAdmin = async (uid: string, currentRole: UserRole) => {
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .update({ role: currentRole === UserRole.ADMIN ? UserRole.USER : UserRole.ADMIN })
         .eq('uid', uid);
 
@@ -54,7 +54,7 @@ const AdminUserManager: React.FC = () => {
   const toggleSubscription = async (uid: string, currentStatus: SubscriptionStatus) => {
     try {
       const { error } = await supabase
-        .from('profiles')
+        .from('user_profiles')
         .update({ subscription_status: currentStatus === SubscriptionStatus.ACTIVE ? SubscriptionStatus.INACTIVE : SubscriptionStatus.ACTIVE })
         .eq('uid', uid);
 
@@ -90,10 +90,10 @@ const AdminUserManager: React.FC = () => {
                 <td className="py-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center overflow-hidden">
-                      {u.photo_url ? <img src={u.photo_url} alt={u.display_name} className="w-full h-full object-cover" /> : <User size={20} className="text-gray-400" />}
+                      {u.photoURL ? <img src={u.photoURL} alt={u.displayName} className="w-full h-full object-cover" /> : <User size={20} className="text-gray-400" />}
                     </div>
                     <div>
-                      <div className="text-sm font-bold">{u.display_name || 'Anonymous'}</div>
+                      <div className="text-sm font-bold">{u.displayName || 'Anonymous'}</div>
                       <div className="text-xs text-gray-400">{u.email}</div>
                     </div>
                   </div>
@@ -109,7 +109,7 @@ const AdminUserManager: React.FC = () => {
                   </span>
                 </td>
                 <td className="py-4">
-                  <div className="text-sm font-bold">${u.total_winnings?.toLocaleString() || '0'}</div>
+                  <div className="text-sm font-bold">${u.totalWinnings?.toLocaleString() || '0'}</div>
                 </td>
                 <td className="py-4 text-right">
                   <div className="flex items-center justify-end space-x-2 opacity-0 group-hover:opacity-100 transition-all">

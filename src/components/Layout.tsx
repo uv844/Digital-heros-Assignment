@@ -18,10 +18,10 @@ const Layout: React.FC = () => {
             <div className="col-span-1 md:col-span-2">
               <div className="flex items-center space-x-2 mb-4">
                 <div className="w-6 h-6 bg-black rounded-full" />
-                <span className="text-lg font-bold tracking-tight">Digital Heros Golf Charity</span>
+                <span className="text-lg font-bold tracking-tight">Digital Heroes Golf Charity</span>
               </div>
               <p className="text-sm text-gray-500 max-w-xs">
-                Digital Heros Golf Charity Subscription Platform: A modern platform combining golf performance tracking, monthly prize draws, and charitable giving.
+                Digital Heroes Golf Charity Subscription Platform: A modern platform combining golf performance tracking, monthly prize draws, and charitable giving.
               </p>
             </div>
             <div>

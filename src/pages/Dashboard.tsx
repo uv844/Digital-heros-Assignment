@@ -1,15 +1,40 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import ScoreEntry from '../components/ScoreEntry';
 import SubscriptionCard from '../components/SubscriptionCard';
-import { motion } from 'motion/react';
-import { Trophy, Heart, Users, ArrowUpRight, Wallet } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Trophy, Heart, Users, ArrowUpRight, Wallet, X, Check } from 'lucide-react';
 import { MOCK_CHARITIES } from '../constants';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 const Dashboard: React.FC = () => {
   const { profile } = useAuth();
+  const [showCharityModal, setShowCharityModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (showHistoryModal) {
+      fetchHistory();
+    }
+  }, [showHistoryModal]);
+
+  const fetchHistory = async () => {
+    if (!profile) return;
+    const { data, error } = await supabase
+      .from('winners')
+      .select('*, draws(*)')
+      .eq('uid', profile.uid)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching history:', error);
+    } else {
+      setHistory(data || []);
+    }
+  };
 
   const handleCharityChange = async (charityId: string) => {
     if (!profile) return;
@@ -21,12 +46,13 @@ const Dashboard: React.FC = () => {
 
       if (error) throw error;
       toast.success('Charity preference updated');
+      setShowCharityModal(false);
     } catch (error: any) {
       toast.error(error.message);
     }
   };
 
-  const selectedCharity = MOCK_CHARITIES.find(c => c.id === profile?.selected_charity_id) || MOCK_CHARITIES[0];
+  const selectedCharity = MOCK_CHARITIES.find(c => c.id === profile?.selectedCharityId) || MOCK_CHARITIES[0];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -61,7 +87,10 @@ const Dashboard: React.FC = () => {
                   <div className="text-4xl font-bold mb-1">${profile?.totalWinnings?.toLocaleString() || '0'}</div>
                   <p className="text-white/40 text-sm">Across 0 winning draws</p>
                 </div>
-                <button className="mt-8 text-sm font-bold flex items-center hover:underline">
+                <button 
+                  onClick={() => setShowHistoryModal(true)}
+                  className="mt-8 text-sm font-bold flex items-center hover:underline"
+                >
                   View History <ArrowUpRight size={16} className="ml-1" />
                 </button>
               </div>
@@ -114,7 +143,7 @@ const Dashboard: React.FC = () => {
             </div>
 
             <button 
-              onClick={() => toast.info('Charity selection coming soon!')}
+              onClick={() => setShowCharityModal(true)}
               className="w-full py-3 border border-gray-200 text-sm font-bold rounded-2xl hover:border-black transition-all"
             >
               Change Charity
@@ -122,6 +151,120 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Charity Selection Modal */}
+      <AnimatePresence>
+        {showCharityModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowCharityModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-bold">Choose Your Charity</h3>
+                  <p className="text-sm text-gray-500">Select where your contributions go</p>
+                </div>
+                <button onClick={() => setShowCharityModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-all">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4">
+                {MOCK_CHARITIES.map((charity) => {
+                  const isSelected = charity.id === profile?.selectedCharityId;
+                  return (
+                    <button
+                      key={charity.id}
+                      onClick={() => handleCharityChange(charity.id)}
+                      className={`w-full flex items-center p-6 rounded-3xl border-2 transition-all text-left group ${
+                        isSelected ? 'border-black bg-gray-50' : 'border-gray-100 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="w-20 h-20 rounded-2xl overflow-hidden mr-6 flex-shrink-0">
+                        <img src={charity.imageURL} alt={charity.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="font-bold">{charity.name}</h4>
+                          {isSelected && <Check size={20} className="text-green-600" />}
+                        </div>
+                        <p className="text-sm text-gray-500 line-clamp-2">{charity.description}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* History Modal */}
+      <AnimatePresence>
+        {showHistoryModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowHistoryModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-bold">Winning History</h3>
+                  <p className="text-sm text-gray-500">Your past draw winnings</p>
+                </div>
+                <button onClick={() => setShowHistoryModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-all">
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="p-8 max-h-[60vh] overflow-y-auto">
+                {history.length > 0 ? (
+                  <div className="space-y-4">
+                    {history.map((win) => (
+                      <div key={win.id} className="p-6 bg-gray-50 rounded-3xl border border-gray-100 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">
+                            {format(new Date(win.draws.date), 'MMMM dd, yyyy')}
+                          </div>
+                          <div className="text-lg font-bold">Match {win.match_type}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-green-600">+${win.prize_amount.toLocaleString()}</div>
+                          <div className={`text-[10px] font-bold uppercase tracking-widest ${win.status === 'paid' ? 'text-blue-600' : 'text-orange-600'}`}>
+                            {win.status}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Trophy size={48} className="mx-auto text-gray-200 mb-4" />
+                    <p className="text-gray-400">No winnings yet. Keep playing!</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

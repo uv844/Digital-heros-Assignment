@@ -6,7 +6,7 @@ import { LogOut, User, LayoutDashboard, Settings, ShieldCheck } from 'lucide-rea
 import { motion } from 'motion/react';
 
 const Navbar: React.FC = () => {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -28,27 +28,31 @@ const Navbar: React.FC = () => {
           <div className="hidden md:flex items-center space-x-8">
             <Link to="/charities" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">Charities</Link>
             <Link to="/how-it-works" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">How it Works</Link>
-            {user ? (
-              <div className="flex items-center space-x-4">
-                {isAdmin && (
-                  <Link to="/admin" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
-                    <ShieldCheck size={20} />
-                  </Link>
+            {!loading && (
+              <>
+                {user ? (
+                  <div className="flex items-center space-x-4">
+                    {isAdmin && (
+                      <Link to="/admin" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
+                        <ShieldCheck size={20} />
+                      </Link>
+                    )}
+                    <Link to="/dashboard" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
+                      <LayoutDashboard size={20} />
+                    </Link>
+                    <button onClick={handleLogout} className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-all">
+                      <LogOut size={20} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-4">
+                    <Link to="/login" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">Login</Link>
+                    <Link to="/signup" className="px-4 py-2 bg-black text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-all">
+                      Join Now
+                    </Link>
+                  </div>
                 )}
-                <Link to="/dashboard" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
-                  <LayoutDashboard size={20} />
-                </Link>
-                <button onClick={handleLogout} className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-all">
-                  <LogOut size={20} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-4">
-                <Link to="/login" className="text-sm font-medium text-gray-600 hover:text-black transition-colors">Login</Link>
-                <Link to="/signup" className="px-4 py-2 bg-black text-white text-sm font-medium rounded-full hover:bg-gray-800 transition-all">
-                  Join Now
-                </Link>
-              </div>
+              </>
             )}
           </div>
         </div>

@@ -66,16 +66,54 @@ ALTER TABLE winners ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view their own profile" ON user_profiles FOR SELECT USING (auth.uid() = uid);
 CREATE POLICY "Users can update their own profile" ON user_profiles FOR UPDATE USING (auth.uid() = uid);
 CREATE POLICY "Users can insert their own profile" ON user_profiles FOR INSERT WITH CHECK (auth.uid() = uid);
+CREATE POLICY "Admins can manage all profiles" ON user_profiles FOR ALL USING (
+  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
+);
 
 -- Golf Scores Policies
 CREATE POLICY "Users can view their own scores" ON golf_scores FOR SELECT USING (auth.uid() = uid);
 CREATE POLICY "Users can insert their own scores" ON golf_scores FOR INSERT WITH CHECK (auth.uid() = uid);
+CREATE POLICY "Users can delete their own scores" ON golf_scores FOR DELETE USING (auth.uid() = uid);
+CREATE POLICY "Admins can manage all scores" ON golf_scores FOR ALL USING (
+  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
+);
 
 -- Charities Policies
 CREATE POLICY "Everyone can view charities" ON charities FOR SELECT USING (true);
+CREATE POLICY "Admins can manage charities" ON charities FOR ALL USING (
+  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
+);
 
 -- Draws Policies
 CREATE POLICY "Everyone can view published draws" ON draws FOR SELECT USING (status = 'published');
+CREATE POLICY "Admins can manage all draws" ON draws FOR ALL USING (
+  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
+);
 
 -- Winners Policies
 CREATE POLICY "Users can view their own winnings" ON winners FOR SELECT USING (auth.uid() = uid);
+CREATE POLICY "Admins can manage all winners" ON winners FOR ALL USING (
+  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
+);
+
+-- Trigger to automatically create a profile on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.user_profiles (uid, email, display_name, role, subscription_status, total_winnings, charity_contribution_percentage)
+  VALUES (
+    new.id,
+    new.email,
+    COALESCE(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'full_name', 'Hero'),
+    'user',
+    'inactive',
+    0,
+    10
+  );
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();

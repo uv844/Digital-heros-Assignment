@@ -7,6 +7,11 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminUsers from './pages/AdminUsers';
+import AdminDraws from './pages/AdminDraws';
+import AdminCharities from './pages/AdminCharities';
+import AdminSettings from './pages/AdminSettings';
+import AdminLayout from './components/AdminLayout';
 import Charities from './pages/Charities';
 import HowItWorks from './pages/HowItWorks';
 import Privacy from './pages/Privacy';
@@ -53,12 +58,18 @@ export default function App() {
                 <Dashboard />
               </ProtectedRoute>
             } />
-            
-            <Route path="admin" element={
-              <AdminRoute>
-                <AdminDashboard />
-              </AdminRoute>
-            } />
+          </Route>
+
+          <Route path="/admin" element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }>
+            <Route index element={<AdminDashboard />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="draws" element={<AdminDraws />} />
+            <Route path="charities" element={<AdminCharities />} />
+            <Route path="settings" element={<AdminSettings />} />
           </Route>
         </Routes>
       </Router>

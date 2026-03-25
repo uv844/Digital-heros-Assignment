@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { SubscriptionStatus } from '../types';
 import { motion } from 'motion/react';
@@ -9,34 +9,31 @@ import { toast } from 'sonner';
 
 const SubscriptionCard: React.FC = () => {
   const { profile } = useAuth();
+  const [loading, setLoading] = useState(false);
 
   const handleSubscribe = async () => {
     if (!profile) return;
+    setLoading(true);
     try {
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          priceId: 'price_YOUR_MONTHLY_PRICE_ID', // You should replace this with your actual Stripe Price ID
-          userId: profile.uid,
-          email: profile.email,
-        }),
-      });
+      // Mock subscription for now
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ 
+          subscription_status: SubscriptionStatus.ACTIVE,
+          renewal_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        })
+        .eq('uid', profile.uid);
 
-      const { url, error } = await response.json();
-      if (error) throw new Error(error);
-
-      if (url) {
-        window.location.href = url;
-      }
+      if (error) throw error;
+      toast.success('Subscription activated! (Demo Mode)');
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const isActive = profile?.subscription_status === SubscriptionStatus.ACTIVE;
+  const isActive = profile?.subscriptionStatus === SubscriptionStatus.ACTIVE;
 
   return (
     <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 h-full flex flex-col">
@@ -72,10 +69,11 @@ const SubscriptionCard: React.FC = () => {
       {!isActive ? (
         <button 
           onClick={handleSubscribe}
-          className="w-full py-4 bg-black text-white font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center justify-center group"
+          disabled={loading}
+          className="w-full py-4 bg-black text-white font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center justify-center group disabled:opacity-50"
         >
           <CreditCard className="mr-2" size={18} />
-          Subscribe Now
+          {loading ? 'Processing...' : 'Subscribe Now'}
         </button>
       ) : (
         <button className="w-full py-4 bg-gray-50 text-gray-400 font-bold rounded-2xl cursor-not-allowed">

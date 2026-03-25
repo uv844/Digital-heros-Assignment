@@ -1,9 +1,8 @@
 import React from 'react';
-import AdminDrawManager from '../components/AdminDrawManager';
-import AdminUserManager from '../components/AdminUserManager';
 import { motion } from 'motion/react';
-import { Users, Trophy, Heart, TrendingUp, BarChart3 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { Link } from 'react-router-dom';
+import { Users, Trophy, Heart, TrendingUp, BarChart3, ChevronRight, Activity, Settings } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const AdminDashboard: React.FC = () => {
   // Mock data for charts
@@ -16,11 +15,11 @@ const AdminDashboard: React.FC = () => {
   const COLORS = ['#000000', '#666666', '#CCCCCC'];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="max-w-7xl mx-auto">
       <header className="mb-12 flex justify-between items-end">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight mb-2">Admin Control</h1>
-          <p className="text-gray-500">Platform oversight and management.</p>
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Admin Overview</h1>
+          <p className="text-gray-500">Real-time platform performance and activity.</p>
         </div>
         <div className="flex items-center space-x-2 bg-black text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -53,9 +52,65 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-        <div className="lg:col-span-2">
-          <AdminDrawManager />
+        {/* Quick Actions */}
+        <div className="lg:col-span-2 space-y-8">
+          <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
+            <h3 className="text-xl font-bold mb-6 flex items-center">
+              <Activity className="mr-3 text-gray-400" size={24} />
+              Quick Management
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { label: 'User Management', description: 'Manage profiles and subscriptions', path: '/admin/users', icon: Users },
+                { label: 'Draw Control', description: 'Execute and publish monthly draws', path: '/admin/draws', icon: Trophy },
+                { label: 'Charity Partners', description: 'Update charity details and impact', path: '/admin/charities', icon: Heart },
+                { label: 'Platform Settings', description: 'Configure global system parameters', path: '/admin/settings', icon: Settings },
+              ].map((action, i) => (
+                <Link 
+                  key={i}
+                  to={action.path}
+                  className="p-6 bg-gray-50 rounded-2xl border border-gray-100 hover:border-black transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center border border-gray-100 group-hover:bg-black group-hover:text-white transition-all">
+                      <action.icon size={18} />
+                    </div>
+                    <ChevronRight size={16} className="text-gray-300 group-hover:text-black transition-all" />
+                  </div>
+                  <div className="text-sm font-bold mb-1">{action.label}</div>
+                  <div className="text-xs text-gray-500">{action.description}</div>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100">
+            <h3 className="text-xl font-bold mb-6">Recent Activity</h3>
+            <div className="space-y-6">
+              {[
+                { user: 'John Doe', action: 'joined the platform', time: '2 mins ago', type: 'signup' },
+                { user: 'Admin', action: 'published Draw #42', time: '1 hour ago', type: 'draw' },
+                { user: 'Sarah Smith', action: 'updated charity choice', time: '3 hours ago', type: 'update' },
+                { user: 'Mike Ross', action: 'won $500 in Draw #41', time: '5 hours ago', type: 'win' },
+              ].map((activity, i) => (
+                <div key={i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-[10px] font-bold">
+                      {activity.user.split(' ').map(n => n[0]).join('')}
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold">{activity.user}</span>
+                      <span className="text-sm text-gray-500 ml-1">{activity.action}</span>
+                    </div>
+                  </div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{activity.time}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
+
+        {/* Chart */}
         <div className="lg:col-span-1">
           <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 h-full">
             <div className="flex justify-between items-center mb-8">
@@ -95,10 +150,6 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-8">
-        <AdminUserManager />
       </div>
     </div>
   );
