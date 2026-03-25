@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Charities from './pages/Charities';
 import HowItWorks from './pages/HowItWorks';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -43,6 +45,8 @@ export default function App() {
             <Route path="signup" element={<Signup />} />
             <Route path="charities" element={<Charities />} />
             <Route path="how-it-works" element={<HowItWorks />} />
+            <Route path="privacy" element={<Privacy />} />
+            <Route path="terms" element={<Terms />} />
             
             <Route path="dashboard" element={
               <ProtectedRoute>
