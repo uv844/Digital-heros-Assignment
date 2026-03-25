@@ -58,7 +58,7 @@ const Dashboard: React.FC = () => {
                   <div className="text-xs font-bold uppercase tracking-widest text-white/40">Total Won</div>
                 </div>
                 <div className="flex-1">
-                  <div className="text-4xl font-bold mb-1">${profile?.total_winnings?.toLocaleString() || '0'}</div>
+                  <div className="text-4xl font-bold mb-1">${profile?.totalWinnings?.toLocaleString() || '0'}</div>
                   <p className="text-white/40 text-sm">Across 0 winning draws</p>
                 </div>
                 <button className="mt-8 text-sm font-bold flex items-center hover:underline">
@@ -109,7 +109,7 @@ const Dashboard: React.FC = () => {
               
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Contribution</span>
-                <span className="text-sm font-bold">{profile?.charity_contribution_percentage || 10}%</span>
+                <span className="text-sm font-bold">{profile?.charityContributionPercentage || 10}%</span>
               </div>
             </div>
 

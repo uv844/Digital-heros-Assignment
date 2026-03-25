@@ -76,7 +76,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Error fetching profile:', error);
         setProfile(null);
       } else {
-        setProfile(data as UserProfile);
+        // Map snake_case from DB to camelCase for the app
+        const mappedProfile: UserProfile = {
+          uid: data.uid,
+          email: data.email,
+          displayName: data.display_name,
+          photoURL: data.photo_url,
+          role: data.role,
+          subscriptionStatus: data.subscription_status,
+          renewalDate: data.renewal_date,
+          selectedCharityId: data.selected_charity_id,
+          charityContributionPercentage: data.charity_contribution_percentage,
+          totalWinnings: Number(data.total_winnings) || 0,
+        };
+        setProfile(mappedProfile);
       }
     } catch (err) {
       console.error('Unexpected error fetching profile:', err);

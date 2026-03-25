@@ -13,17 +13,24 @@ const SubscriptionCard: React.FC = () => {
   const handleSubscribe = async () => {
     if (!profile) return;
     try {
-      // Simulate Stripe checkout
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          subscription_status: SubscriptionStatus.ACTIVE,
-          renewal_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        })
-        .eq('uid', profile.uid);
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          priceId: 'price_YOUR_MONTHLY_PRICE_ID', // You should replace this with your actual Stripe Price ID
+          userId: profile.uid,
+          email: profile.email,
+        }),
+      });
 
-      if (error) throw error;
-      toast.success('Subscription activated!');
+      const { url, error } = await response.json();
+      if (error) throw new Error(error);
+
+      if (url) {
+        window.location.href = url;
+      }
     } catch (error: any) {
       toast.error(error.message);
     }
