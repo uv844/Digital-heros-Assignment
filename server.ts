@@ -1,5 +1,4 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Stripe from 'stripe';
@@ -142,11 +141,13 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(indexPath, (err) => {
       if (err) {
         console.error('Error serving index.html:', err);
-        res.status(500).send('Server Error: Frontend build (dist/index.html) not found. Please ensure "npm run build" completed successfully.');
+        res.status(500).send('Server Error: Frontend build (dist/index.html) not found.');
       }
     });
   });
 } else {
+  // Dynamic import for Vite to avoid loading it in production
+  const { createServer: createViteServer } = await import('vite');
   const vite = await createViteServer({
     server: { middlewareMode: true },
     appType: 'spa',
