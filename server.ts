@@ -1,0 +1,154 @@
+import express from 'express';
+import { createServer as createViteServer } from 'vite';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2025-01-27-preview' as any,
+});
+
+const supabaseAdmin = createClient(
+  process.env.VITE_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+);
+
+const app = express();
+
+async function startServer() {
+  const PORT = 3000;
+
+  app.use(cors());
+
+  // Stripe Webhook (must be before body-parser)
+  app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+    const sig = req.headers['stripe-signature'] as string;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+      console.error('Missing STRIPE_WEBHOOK_SECRET');
+      return res.status(500).send('Webhook secret not configured');
+    }
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        webhookSecret
+      );
+    } catch (err: any) {
+      console.error(`Webhook Error: ${err.message}`);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    switch (event.type) {
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted':
+        const subscription = event.data.object as any;
+        const customerId = subscription.customer as string;
+        const status = subscription.status;
+        const renewalDate = new Date(subscription.current_period_end * 1000).toISOString();
+
+        // Find user by stripe_customer_id
+        const { data: profile, error: findError } = await supabaseAdmin
+          .from('user_profiles')
+          .select('uid')
+          .eq('stripe_customer_id', customerId)
+          .single();
+
+        if (profile) {
+          await supabaseAdmin
+            .from('user_profiles')
+            .update({
+              subscription_status: status === 'active' ? 'active' : 'inactive',
+              renewal_date: renewalDate,
+            })
+            .eq('uid', profile.uid);
+        }
+        break;
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({ received: true });
+  });
+
+  app.use(bodyParser.json());
+
+  // API Routes
+  app.post('/api/create-checkout-session', async (req, res) => {
+    const { priceId, userId, email } = req.body;
+
+    try {
+      // Create or get Stripe customer
+      let { data: profile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('stripe_customer_id')
+        .eq('uid', userId)
+        .single();
+
+      let customerId = profile?.stripe_customer_id;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: email,
+          metadata: { userId },
+        });
+        customerId = customer.id;
+        await supabaseAdmin
+          .from('user_profiles')
+          .update({ stripe_customer_id: customerId })
+          .eq('uid', userId);
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ['card'],
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode: 'subscription',
+        success_url: `${process.env.APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.APP_URL}/signup`,
+        metadata: { userId },
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  // Only listen if not running in a serverless environment (like Vercel)
+  if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
+}
+
+startServer();
+
+export default app;
