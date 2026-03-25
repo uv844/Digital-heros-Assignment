@@ -119,6 +119,12 @@ const Login: React.FC = () => {
         <p className="text-center text-sm text-gray-500 mt-10">
           Don't have an account? <Link to="/signup" className="text-black font-bold hover:underline">Sign up</Link>
         </p>
+
+        <div className="mt-8 pt-8 border-t border-gray-100 flex justify-center space-x-4 text-[10px] uppercase tracking-widest text-gray-400">
+          <Link to="/privacy" className="hover:text-black transition-colors">Privacy Policy</Link>
+          <span>•</span>
+          <Link to="/terms" className="hover:text-black transition-colors">Terms of Service</Link>
+        </div>
       </motion.div>
     </div>
   );
