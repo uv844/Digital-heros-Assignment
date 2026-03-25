@@ -90,10 +90,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     selectedCharityId: data.selected_charity_id,
     charityContributionPercentage: data.charity_contribution_percentage,
     totalWinnings: Number(data.total_winnings) || 0,
+    isBlocked: data.is_blocked || false,
   });
 
   const fetchProfile = async (uid: string) => {
+    setLoading(true);
     try {
+      console.log('Fetching profile for:', uid);
       // Retry logic for profile fetching (useful if trigger is still running)
       let retries = 3;
       let data = null;
@@ -104,13 +107,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('user_profiles')
           .select('*')
           .eq('uid', uid)
-          .single();
+          .maybeSingle(); // Use maybeSingle to avoid PGRST116 error logging
         
         data = result.data;
         error = result.error;
 
         if (data || (error && error.code !== 'PGRST116')) break;
         
+        console.log(`Profile not found, retrying... (${retries} left)`);
         // Wait a bit before retrying
         await new Promise(resolve => setTimeout(resolve, 1000));
         retries--;
@@ -123,50 +127,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (!data) {
-        // If we reach here, the trigger might be slow or failed.
-        // We wait and retry one last time before giving up.
-        console.warn('Profile not found yet, waiting for trigger...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        const finalCheck = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('uid', uid)
-          .single();
+        console.warn('Profile not found after retries. Attempting manual creation...');
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const { data: newProfile, error: insertError } = await supabase
+            .from('user_profiles')
+            .insert({
+              uid: authUser.id,
+              email: authUser.email!,
+              display_name: authUser.user_metadata?.display_name || authUser.user_metadata?.full_name || 'Hero',
+              role: authUser.email === 'yuvrajch1503@gmail.com' ? 'admin' : 'user',
+              subscription_status: 'inactive',
+              total_winnings: 0,
+              charity_contribution_percentage: 10
+            })
+            .select()
+            .single();
           
-        if (finalCheck.data) {
-          setProfile(mapProfile(finalCheck.data));
-        } else {
-          // If profile still doesn't exist, create it manually (fallback for existing users after table deletion)
-          console.warn('Profile creation failed via trigger. Attempting manual creation...');
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (authUser) {
-            const { data: newProfile, error: insertError } = await supabase
-              .from('user_profiles')
-              .insert({
-                uid: authUser.id,
-                email: authUser.email!,
-                display_name: authUser.user_metadata?.display_name || authUser.user_metadata?.full_name || 'Hero',
-                role: authUser.email === 'yuvrajch1503@gmail.com' ? 'admin' : 'user',
-                subscription_status: 'inactive',
-                total_winnings: 0,
-                charity_contribution_percentage: 10
-              })
-              .select()
-              .single();
-            
-            if (newProfile) {
-              setProfile(mapProfile(newProfile));
-            } else {
-              console.error('Manual profile creation failed:', insertError);
-              setProfile(null);
-            }
+          if (newProfile) {
+            console.log('Profile created manually:', newProfile);
+            setProfile(mapProfile(newProfile));
           } else {
+            console.error('Manual profile creation failed:', insertError);
             setProfile(null);
           }
+        } else {
+          setProfile(null);
         }
       } else {
-        setProfile(mapProfile(data));
+        console.log('Profile fetched successfully:', data);
+        const mappedProfile = mapProfile(data);
+        if (mappedProfile.isBlocked) {
+          console.warn('User is blocked. Signing out...');
+          await supabase.auth.signOut();
+          setUser(null);
+          setProfile(null);
+          return;
+        }
+        setProfile(mappedProfile);
       }
     } catch (err) {
       console.error('Unexpected error fetching profile:', err);

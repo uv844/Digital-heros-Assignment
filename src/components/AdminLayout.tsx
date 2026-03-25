@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -12,14 +12,24 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 
 const AdminLayout: React.FC = () => {
   const { profile } = useAuth();
   const location = useLocation();
 
+  const navigate = useNavigate();
+
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast.success('Logged out successfully');
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Logout error:', err);
+      toast.error('Failed to logout');
+    }
   };
 
   const navItems = [

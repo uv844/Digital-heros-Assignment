@@ -64,13 +64,18 @@ const ScoreEntry: React.FC = () => {
     }
 
     setLoading(true);
+    console.log('Attempting to add score:', { uid: user.id, score: scoreVal });
 
     try {
       // If we already have 5 scores, delete the oldest one
       if (scores.length >= 5) {
         const oldestScore = scores[scores.length - 1];
         if (oldestScore.id) {
-          await supabase.from('golf_scores').delete().eq('id', oldestScore.id);
+          const { error: deleteError } = await supabase.from('golf_scores').delete().eq('id', oldestScore.id);
+          if (deleteError) {
+            console.error('Error deleting old score:', deleteError);
+            // We continue anyway, as the insert might still work or the user can try again
+          }
         }
       }
 
@@ -87,7 +92,7 @@ const ScoreEntry: React.FC = () => {
       fetchScores();
     } catch (error: any) {
       console.error('Error adding score:', error);
-      toast.error('Failed to add score');
+      toast.error(error.message || 'Failed to add score. Please check your connection.');
     } finally {
       setLoading(false);
     }

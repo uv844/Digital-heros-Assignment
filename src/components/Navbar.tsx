@@ -2,16 +2,24 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { LogOut, User, LayoutDashboard, Settings, ShieldCheck } from 'lucide-react';
+import { LogOut, User, LayoutDashboard, ShieldCheck, UserCircle } from 'lucide-react';
 import { motion } from 'motion/react';
+import { toast } from 'sonner';
 
 const Navbar: React.FC = () => {
   const { user, profile, isAdmin, loading } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/');
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      toast.success('Logged out successfully');
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Logout error:', err);
+      toast.error('Failed to logout');
+    }
   };
 
   return (
@@ -33,14 +41,21 @@ const Navbar: React.FC = () => {
                 {user ? (
                   <div className="flex items-center space-x-4">
                     {isAdmin && (
-                      <Link to="/admin" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
+                      <Link to="/admin" title="Admin Panel" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
                         <ShieldCheck size={20} />
                       </Link>
                     )}
-                    <Link to="/dashboard" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
+                    <Link to="/profile" title="My Profile" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
+                      <UserCircle size={20} />
+                    </Link>
+                    <Link to="/dashboard" title="Dashboard" className="p-2 text-gray-600 hover:text-black hover:bg-gray-100 rounded-full transition-all">
                       <LayoutDashboard size={20} />
                     </Link>
-                    <button onClick={handleLogout} className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-all">
+                    <button 
+                      onClick={handleLogout} 
+                      title="Logout"
+                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
+                    >
                       <LogOut size={20} />
                     </button>
                   </div>

@@ -6,7 +6,7 @@ import { User, Mail, Lock, Save, Camera, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Profile: React.FC = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [displayName, setDisplayName] = useState(profile?.displayName || '');
   const [newPassword, setNewPassword] = useState('');
@@ -23,6 +23,7 @@ const Profile: React.FC = () => {
         .eq('uid', user.id);
 
       if (error) throw error;
+      await refreshProfile();
       toast.success('Profile updated successfully');
     } catch (error: any) {
       toast.error(error.message);

@@ -30,6 +30,7 @@ export interface UserProfile {
   selectedCharityId?: string;
   charityContributionPercentage?: number;
   totalWinnings?: number;
+  isBlocked?: boolean;
 }
 
 export interface GolfScore {

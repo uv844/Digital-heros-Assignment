@@ -11,15 +11,25 @@ interface PricingModalProps {
 }
 
 const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose, showSkip = false }) => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
   const handleSubscribe = async () => {
-    if (!profile) {
+    if (!user) {
       toast.error('Please log in to subscribe');
       return;
     }
+    
+    // If profile is missing, we can still try to subscribe using user data
+    const userId = profile?.uid || user.id;
+    const email = profile?.email || user.email;
+
+    if (!email) {
+      toast.error('User email not found. Please try logging in again.');
+      return;
+    }
+
     setLoading(true);
     try {
       const priceId = billingCycle === 'monthly' 
@@ -37,8 +47,8 @@ const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose, showSkip =
         },
         body: JSON.stringify({
           priceId,
-          userId: profile.uid,
-          email: profile.email,
+          userId,
+          email,
         }),
       });
 
@@ -149,7 +159,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose, showSkip =
                 </div>
                 <div className="flex items-baseline justify-center">
                   <span className="text-5xl font-black tracking-tighter">
-                    ${billingCycle === 'monthly' ? '25' : '240'}
+                    ${billingCycle === 'monthly' ? '20' : '200'}
                   </span>
                   <span className="text-gray-400 font-medium ml-2">
                     /{billingCycle === 'monthly' ? 'mo' : 'yr'}
@@ -158,7 +168,7 @@ const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose, showSkip =
                 <p className="text-sm text-gray-500 mt-4">
                   {billingCycle === 'monthly' 
                     ? 'Billed monthly. Cancel anytime.' 
-                    : 'Billed annually. Equivalent to $20/mo.'}
+                    : 'Billed annually. Equivalent to $16.67/mo.'}
                 </p>
               </div>
 

@@ -94,12 +94,24 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      {!profile && (
+        <div className="mb-8 p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center space-x-3">
+          <div className="p-2 bg-orange-100 text-orange-600 rounded-xl">
+            <UserIcon size={20} />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-orange-800">Profile Syncing</h4>
+            <p className="text-xs text-orange-700">We're setting up your profile. Some features might be limited until this completes.</p>
+          </div>
+        </div>
+      )}
+
       <header className="mb-12">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
         >
-          <h1 className="text-4xl font-bold tracking-tight mb-2">Hello, {profile?.display_name?.split(' ')[0] || 'Hero'}</h1>
+          <h1 className="text-4xl font-bold tracking-tight mb-2">Hello, {profile?.displayName?.split(' ')[0] || 'Hero'}</h1>
           <p className="text-gray-500">Welcome back to your dashboard.</p>
         </motion.div>
       </header>

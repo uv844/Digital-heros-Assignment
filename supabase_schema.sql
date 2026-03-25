@@ -11,6 +11,7 @@ CREATE TABLE user_profiles (
   charity_contribution_percentage INTEGER DEFAULT 10,
   total_winnings DECIMAL(12, 2) DEFAULT 0,
   stripe_customer_id TEXT,
+  is_blocked BOOLEAN DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
