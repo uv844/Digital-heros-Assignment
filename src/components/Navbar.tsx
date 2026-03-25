@@ -12,13 +12,18 @@ const Navbar: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      console.log('Attempting logout...');
+      // Try to sign out from Supabase
+      await supabase.auth.signOut();
       toast.success('Logged out successfully');
-      window.location.href = '/';
     } catch (err) {
-      console.error('Logout error:', err);
-      toast.error('Failed to logout');
+      console.error('Logout error (Supabase):', err);
+    } finally {
+      // Always clear local storage and redirect as a fallback
+      console.log('Clearing local session data...');
+      localStorage.clear();
+      // Use window.location.href to force a full page reload and clear all states
+      window.location.href = '/';
     }
   };
 

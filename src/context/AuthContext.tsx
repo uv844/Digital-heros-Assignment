@@ -34,6 +34,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (sessionError) {
           console.error('Session error:', sessionError);
+          // If refresh token is invalid, sign out to clear local storage
+          if (sessionError.message.includes('Refresh Token Not Found') || sessionError.status === 400) {
+            console.warn('Invalid session detected, clearing local auth...');
+            try {
+              await supabase.auth.signOut();
+            } catch (e) {
+              // Ignore signOut errors
+            }
+            localStorage.clear();
+            window.location.href = '/login';
+          }
           if (mounted) setLoading(false);
           return;
         }
@@ -69,6 +80,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await fetchProfile(currentUser.id);
         }
       } else if (event === 'SIGNED_OUT') {
+        if (mounted) {
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+        }
+      } else if (event === 'USER_UPDATED' && !session) {
+        // This can happen if the session is invalidated
+        console.warn('User session invalidated, signing out...');
+        await supabase.auth.signOut();
         if (mounted) {
           setUser(null);
           setProfile(null);

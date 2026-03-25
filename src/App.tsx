@@ -37,10 +37,19 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     }
   }, [authLoading]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white">
-    <div className="flex flex-col items-center space-y-4">
+  if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
+    <div className="flex flex-col items-center space-y-4 text-center">
       <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin" />
-      <div className="text-sm font-bold uppercase tracking-widest text-gray-400">Loading...</div>
+      <div className="text-sm font-bold uppercase tracking-widest text-gray-400">Loading Protected Route...</div>
+      <button 
+        onClick={() => {
+          localStorage.clear();
+          window.location.href = '/';
+        }}
+        className="mt-8 text-xs text-gray-400 hover:text-black underline transition-colors"
+      >
+        Stuck? Click here to reset session
+      </button>
     </div>
   </div>;
   if (!user) return <Navigate to="/login" />;
@@ -64,10 +73,19 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [authLoading]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white">
-    <div className="flex flex-col items-center space-y-4">
+  if (loading) return <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4">
+    <div className="flex flex-col items-center space-y-4 text-center">
       <div className="w-12 h-12 border-4 border-black border-t-transparent rounded-full animate-spin" />
-      <div className="text-sm font-bold uppercase tracking-widest text-gray-400">Loading...</div>
+      <div className="text-sm font-bold uppercase tracking-widest text-gray-400">Loading Admin Route...</div>
+      <button 
+        onClick={() => {
+          localStorage.clear();
+          window.location.href = '/';
+        }}
+        className="mt-8 text-xs text-gray-400 hover:text-black underline transition-colors"
+      >
+        Stuck? Click here to reset session
+      </button>
     </div>
   </div>;
   if (!user) return <Navigate to="/login" />;

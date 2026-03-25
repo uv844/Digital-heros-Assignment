@@ -38,12 +38,30 @@ class ErrorBoundary extends React.Component<Props, State> {
             <p className="text-gray-500 mb-8">
               {this.state.error?.message || 'An unexpected error occurred. Please try refreshing the page.'}
             </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full py-4 bg-black text-white font-bold rounded-2xl hover:bg-gray-800 transition-all"
-            >
-              Refresh Page
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full py-4 bg-black text-white font-bold rounded-2xl hover:bg-gray-800 transition-all"
+              >
+                Refresh Page
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const { supabase } = await import('../lib/supabase');
+                    await supabase.auth.signOut();
+                    localStorage.clear();
+                    window.location.href = '/login';
+                  } catch (e) {
+                    localStorage.clear();
+                    window.location.href = '/';
+                  }
+                }}
+                className="w-full py-4 bg-white text-gray-500 border border-gray-100 font-bold rounded-2xl hover:border-black hover:text-black transition-all"
+              >
+                Clear Session & Log Out
+              </button>
+            </div>
           </div>
         </div>
       );
