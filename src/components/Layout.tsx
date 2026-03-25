@@ -1,7 +1,6 @@
 import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import Navbar from './Navbar';
-import { Toaster } from 'sonner';
 
 const Layout: React.FC = () => {
   return (
@@ -10,7 +9,6 @@ const Layout: React.FC = () => {
       <main className="pt-16">
         <Outlet />
       </main>
-      <Toaster position="top-right" richColors />
       
       <footer className="bg-white border-t border-gray-100 py-12 mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

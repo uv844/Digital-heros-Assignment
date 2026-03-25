@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
 
 const AdminLayout: React.FC = () => {
   const { profile } = useAuth();
@@ -119,8 +119,6 @@ const AdminLayout: React.FC = () => {
           <Outlet />
         </div>
       </main>
-
-      <Toaster position="top-right" richColors />
     </div>
   );
 };

@@ -45,6 +45,7 @@ export interface Charity {
   name: string;
   description: string;
   image_url: string;
+  created_at: string;
   upcoming_events?: Array<{
     name: string;
     date: string;

@@ -63,39 +63,63 @@ ALTER TABLE charities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE draws ENABLE ROW LEVEL SECURITY;
 ALTER TABLE winners ENABLE ROW LEVEL SECURITY;
 
+-- Helper function to check admin status without recursion
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.user_profiles
+    WHERE uid = auth.uid() AND role = 'admin' AND is_blocked = false
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- User Profiles Policies
-CREATE POLICY "Users can view their own profile" ON user_profiles FOR SELECT USING (auth.uid() = uid);
-CREATE POLICY "Users can update their own profile" ON user_profiles FOR UPDATE USING (auth.uid() = uid);
-CREATE POLICY "Users can insert their own profile" ON user_profiles FOR INSERT WITH CHECK (auth.uid() = uid);
-CREATE POLICY "Admins can manage all profiles" ON user_profiles FOR ALL USING (
-  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
-);
+CREATE POLICY "Users can view their own profile" ON user_profiles 
+  FOR SELECT USING (auth.uid() = uid AND is_blocked = false);
+
+CREATE POLICY "Users can update their own profile" ON user_profiles 
+  FOR UPDATE USING (auth.uid() = uid AND is_blocked = false);
+
+CREATE POLICY "Users can insert their own profile" ON user_profiles 
+  FOR INSERT WITH CHECK (auth.uid() = uid);
+
+CREATE POLICY "Admins can manage all profiles" ON user_profiles 
+  FOR ALL USING (public.is_admin());
 
 -- Golf Scores Policies
-CREATE POLICY "Users can view their own scores" ON golf_scores FOR SELECT USING (auth.uid() = uid);
-CREATE POLICY "Users can insert their own scores" ON golf_scores FOR INSERT WITH CHECK (auth.uid() = uid);
-CREATE POLICY "Users can delete their own scores" ON golf_scores FOR DELETE USING (auth.uid() = uid);
-CREATE POLICY "Admins can manage all scores" ON golf_scores FOR ALL USING (
-  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
-);
+CREATE POLICY "Users can view their own scores" ON golf_scores 
+  FOR SELECT USING (auth.uid() = uid AND EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND is_blocked = false));
+
+CREATE POLICY "Users can insert their own scores" ON golf_scores 
+  FOR INSERT WITH CHECK (auth.uid() = uid AND EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND is_blocked = false));
+
+CREATE POLICY "Users can delete their own scores" ON golf_scores 
+  FOR DELETE USING (auth.uid() = uid AND EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND is_blocked = false));
+
+CREATE POLICY "Admins can manage all scores" ON golf_scores 
+  FOR ALL USING (public.is_admin());
 
 -- Charities Policies
-CREATE POLICY "Everyone can view charities" ON charities FOR SELECT USING (true);
-CREATE POLICY "Admins can manage charities" ON charities FOR ALL USING (
-  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
-);
+CREATE POLICY "Everyone can view charities" ON charities 
+  FOR SELECT USING (true);
+
+CREATE POLICY "Admins can manage charities" ON charities 
+  FOR ALL USING (public.is_admin());
 
 -- Draws Policies
-CREATE POLICY "Everyone can view published draws" ON draws FOR SELECT USING (status = 'published');
-CREATE POLICY "Admins can manage all draws" ON draws FOR ALL USING (
-  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
-);
+CREATE POLICY "Everyone can view published draws" ON draws 
+  FOR SELECT USING (status = 'published');
+
+CREATE POLICY "Admins can manage all draws" ON draws 
+  FOR ALL USING (public.is_admin());
 
 -- Winners Policies
-CREATE POLICY "Users can view their own winnings" ON winners FOR SELECT USING (auth.uid() = uid);
-CREATE POLICY "Admins can manage all winners" ON winners FOR ALL USING (
-  EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND role = 'admin')
-);
+CREATE POLICY "Users can view their own winnings" ON winners 
+  FOR SELECT USING (auth.uid() = uid AND EXISTS (SELECT 1 FROM user_profiles WHERE uid = auth.uid() AND is_blocked = false));
+
+CREATE POLICY "Admins can manage all winners" ON winners 
+  FOR ALL USING (public.is_admin());
 
 -- Trigger to automatically create a profile on signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()

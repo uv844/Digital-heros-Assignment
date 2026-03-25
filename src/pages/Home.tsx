@@ -3,8 +3,12 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ArrowRight, Trophy, Heart, Target, ChevronRight } from 'lucide-react';
 import { MOCK_CHARITIES } from '../constants';
+import { useAuth } from '../context/AuthContext';
 
 const Home: React.FC = () => {
+  const { user } = useAuth();
+  const startPath = user ? '/dashboard' : '/signup';
+
   return (
     <div className="flex flex-col">
       {/* Hero Section */}
@@ -31,8 +35,8 @@ const Home: React.FC = () => {
               Track your performance, enter monthly draws, and support world-class charities with every subscription.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/signup" className="px-8 py-4 bg-black text-white font-bold rounded-full hover:bg-gray-800 transition-all flex items-center group">
-                Get Started
+              <Link to={startPath} className="px-8 py-4 bg-black text-white font-bold rounded-full hover:bg-gray-800 transition-all flex items-center group">
+                {user ? 'Go to Dashboard' : 'Get Started'}
                 <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
               </Link>
               <Link to="/how-it-works" className="px-8 py-4 bg-white text-black border border-gray-200 font-bold rounded-full hover:border-black transition-all">
@@ -174,8 +178,8 @@ const Home: React.FC = () => {
               <p className="text-gray-400 text-lg mb-12 max-w-xl mx-auto">
                 Join thousands of golfers making a real impact. Choose your plan and start playing for purpose today.
               </p>
-              <Link to="/signup" className="px-12 py-5 bg-white text-black font-bold rounded-full hover:bg-gray-100 transition-all inline-block">
-                Subscribe Now
+              <Link to={startPath} className="px-12 py-5 bg-white text-black font-bold rounded-full hover:bg-gray-100 transition-all inline-block">
+                {user ? 'Go to Dashboard' : 'Subscribe Now'}
               </Link>
             </div>
           </div>
