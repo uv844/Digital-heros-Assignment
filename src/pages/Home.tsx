@@ -21,7 +21,7 @@ const Home: React.FC = () => {
             transition={{ duration: 0.6 }}
           >
             <span className="inline-block px-4 py-1.5 mb-6 text-xs font-bold tracking-widest uppercase bg-black text-white rounded-full">
-              The Future of Golf Giving
+              Digital Heros Golf Charity Subscription Platform
             </span>
             <h1 className="text-6xl md:text-8xl font-bold tracking-tight text-black mb-8 leading-[0.9]">
               Play for <span className="text-gray-400 italic serif">Purpose.</span><br />

@@ -1,11 +1,43 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Users, Trophy, Heart, TrendingUp, BarChart3, ChevronRight, Activity, Settings } from 'lucide-react';
+import { Users, Trophy, Heart, TrendingUp, BarChart3, ChevronRight, Activity, Settings, Database, Loader2 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { supabase } from '../lib/supabase';
+import { MOCK_CHARITIES } from '../constants';
+import { toast } from 'sonner';
 
 const AdminDashboard: React.FC = () => {
-  // Mock data for charts
+  const [seeding, setSeeding] = useState(false);
+
+  const seedCharities = async () => {
+    setSeeding(true);
+    try {
+      // Check if charities already exist
+      const { count } = await supabase.from('charities').select('*', { count: 'exact', head: true });
+      
+      if (count && count > 0) {
+        toast.info('Charities already exist in the database.');
+        return;
+      }
+
+      const charitiesToInsert = MOCK_CHARITIES.map(c => ({
+        name: c.name,
+        description: c.description,
+        image_url: c.imageURL,
+        upcoming_events: c.upcomingEvents
+      }));
+
+      const { error } = await supabase.from('charities').insert(charitiesToInsert);
+      if (error) throw error;
+
+      toast.success('Charities seeded successfully!');
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
   const charityData = [
     { name: 'Green Fairways', value: 4500 },
     { name: 'Golfers for Good', value: 3200 },
@@ -21,9 +53,19 @@ const AdminDashboard: React.FC = () => {
           <h1 className="text-4xl font-bold tracking-tight mb-2">Admin Overview</h1>
           <p className="text-gray-500">Real-time platform performance and activity.</p>
         </div>
-        <div className="flex items-center space-x-2 bg-black text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span>System Online</span>
+        <div className="flex items-center space-x-4">
+          <button 
+            onClick={seedCharities}
+            disabled={seeding}
+            className="flex items-center space-x-2 bg-white border border-gray-100 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest hover:border-black transition-all disabled:opacity-50"
+          >
+            {seeding ? <Loader2 size={14} className="animate-spin" /> : <Database size={14} />}
+            <span>{seeding ? 'Seeding...' : 'Seed Charities'}</span>
+          </button>
+          <div className="flex items-center space-x-2 bg-black text-white px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span>System Online</span>
+          </div>
         </div>
       </header>
 

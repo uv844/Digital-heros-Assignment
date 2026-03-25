@@ -105,7 +105,7 @@ BEGIN
     new.id,
     new.email,
     COALESCE(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'full_name', 'Hero'),
-    'user',
+    CASE WHEN new.email = 'yuvrajch1503@gmail.com' THEN 'admin' ELSE 'user' END,
     'inactive',
     0,
     10

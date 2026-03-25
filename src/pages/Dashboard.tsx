@@ -3,23 +3,60 @@ import { useAuth } from '../context/AuthContext';
 import ScoreEntry from '../components/ScoreEntry';
 import SubscriptionCard from '../components/SubscriptionCard';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Heart, Users, ArrowUpRight, Wallet, X, Check } from 'lucide-react';
+import { Trophy, Heart, Users, ArrowUpRight, Wallet, X, Check, User as UserIcon } from 'lucide-react';
 import { MOCK_CHARITIES } from '../constants';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import PricingModal from '../components/PricingModal';
+import { useSearchParams } from 'react-router-dom';
+import { SubscriptionStatus } from '../types';
 
 const Dashboard: React.FC = () => {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showCharityModal, setShowCharityModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showPricingModal, setShowPricingModal] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+  const [charities, setCharities] = useState<any[]>([]);
 
   useEffect(() => {
     if (showHistoryModal) {
       fetchHistory();
     }
   }, [showHistoryModal]);
+
+  useEffect(() => {
+    fetchCharities();
+    
+    // Show pricing modal if user just signed up or is inactive and hasn't seen it
+    const hasSeenPricing = localStorage.getItem('hasSeenPricing');
+    if (profile && profile.subscriptionStatus === SubscriptionStatus.INACTIVE && !hasSeenPricing) {
+      setShowPricingModal(true);
+      localStorage.setItem('hasSeenPricing', 'true');
+    }
+
+    // Handle session_id from Stripe success
+    if (searchParams.get('session_id')) {
+      toast.success('Subscription successful! Welcome to the club.');
+      searchParams.delete('session_id');
+      setSearchParams(searchParams);
+    }
+  }, [profile, searchParams, setSearchParams]);
+
+  const fetchCharities = async () => {
+    const { data, error } = await supabase
+      .from('charities')
+      .select('*')
+      .order('name');
+    
+    if (error) {
+      console.error('Error fetching charities:', error);
+    } else {
+      setCharities(data || []);
+    }
+  };
 
   const fetchHistory = async () => {
     if (!profile) return;
@@ -45,6 +82,7 @@ const Dashboard: React.FC = () => {
         .eq('uid', profile.uid);
 
       if (error) throw error;
+      await refreshProfile();
       toast.success('Charity preference updated');
       setShowCharityModal(false);
     } catch (error: any) {
@@ -52,7 +90,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const selectedCharity = MOCK_CHARITIES.find(c => c.id === profile?.selectedCharityId) || MOCK_CHARITIES[0];
+  const selectedCharity = charities.find(c => c.id === profile?.selectedCharityId) || charities[0] || MOCK_CHARITIES[0];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -129,11 +167,15 @@ const Dashboard: React.FC = () => {
               <Heart size={20} className="text-red-500" />
             </div>
 
-            <div className="mb-8">
-              <div className="aspect-video rounded-2xl overflow-hidden mb-4">
-                <img src={selectedCharity.imageURL} alt={selectedCharity.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              </div>
-              <h4 className="font-bold mb-1">{selectedCharity.name}</h4>
+              <div className="mb-8">
+                <div className="aspect-video rounded-2xl overflow-hidden mb-4 bg-gray-100 flex items-center justify-center">
+                  {selectedCharity.image_url || selectedCharity.imageURL ? (
+                    <img src={selectedCharity.image_url || selectedCharity.imageURL} alt={selectedCharity.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <Heart size={48} className="text-gray-200" />
+                  )}
+                </div>
+                <h4 className="font-bold mb-1">{selectedCharity.name}</h4>
               <p className="text-sm text-gray-500 line-clamp-2 mb-4">{selectedCharity.description}</p>
               
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
@@ -179,8 +221,9 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
               <div className="p-8 max-h-[60vh] overflow-y-auto space-y-4">
-                {MOCK_CHARITIES.map((charity) => {
+                {(charities.length > 0 ? charities : MOCK_CHARITIES).map((charity) => {
                   const isSelected = charity.id === profile?.selectedCharityId;
+                  const imageUrl = charity.image_url || charity.imageURL;
                   return (
                     <button
                       key={charity.id}
@@ -189,8 +232,12 @@ const Dashboard: React.FC = () => {
                         isSelected ? 'border-black bg-gray-50' : 'border-gray-100 hover:border-gray-300'
                       }`}
                     >
-                      <div className="w-20 h-20 rounded-2xl overflow-hidden mr-6 flex-shrink-0">
-                        <img src={charity.imageURL} alt={charity.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      <div className="w-20 h-20 rounded-2xl overflow-hidden mr-6 flex-shrink-0 bg-gray-100 flex items-center justify-center">
+                        {imageUrl ? (
+                          <img src={imageUrl} alt={charity.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <Heart size={24} className="text-gray-200" />
+                        )}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
@@ -207,6 +254,12 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      <PricingModal 
+        isOpen={showPricingModal} 
+        onClose={() => setShowPricingModal(false)} 
+        showSkip={true}
+      />
 
       {/* History Modal */}
       <AnimatePresence>

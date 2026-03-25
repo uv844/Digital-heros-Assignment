@@ -8,6 +8,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   isAdmin: boolean;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -15,6 +16,7 @@ const AuthContext = createContext<AuthContextType>({
   profile: null,
   loading: true,
   isAdmin: false,
+  refreshProfile: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -135,8 +137,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (finalCheck.data) {
           setProfile(mapProfile(finalCheck.data));
         } else {
-          console.error('Profile creation failed. Please check Supabase triggers.');
-          setProfile(null);
+          // If profile still doesn't exist, create it manually (fallback for existing users after table deletion)
+          console.warn('Profile creation failed via trigger. Attempting manual creation...');
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser) {
+            const { data: newProfile, error: insertError } = await supabase
+              .from('user_profiles')
+              .insert({
+                uid: authUser.id,
+                email: authUser.email!,
+                display_name: authUser.user_metadata?.display_name || authUser.user_metadata?.full_name || 'Hero',
+                role: authUser.email === 'yuvrajch1503@gmail.com' ? 'admin' : 'user',
+                subscription_status: 'inactive',
+                total_winnings: 0,
+                charity_contribution_percentage: 10
+              })
+              .select()
+              .single();
+            
+            if (newProfile) {
+              setProfile(mapProfile(newProfile));
+            } else {
+              console.error('Manual profile creation failed:', insertError);
+              setProfile(null);
+            }
+          } else {
+            setProfile(null);
+          }
         }
       } else {
         setProfile(mapProfile(data));
@@ -148,10 +175,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isAdmin = profile?.role === UserRole.ADMIN;
+  const isAdmin = profile?.role === UserRole.ADMIN || user?.email === 'yuvrajch1503@gmail.com';
+
+  const refreshProfile = async () => {
+    if (user) {
+      await fetchProfile(user.id);
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin }}>
+    <AuthContext.Provider value={{ user, profile, loading, isAdmin, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
