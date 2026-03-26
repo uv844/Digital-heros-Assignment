@@ -8,7 +8,8 @@ import {
   Settings, 
   LogOut, 
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  Database
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -90,6 +91,15 @@ const AdminLayout: React.FC = () => {
               <ShieldCheck size={18} />
               <span className="text-sm font-bold">User Dashboard</span>
             </Link>
+            <a
+              href={`https://supabase.com/dashboard/project/${import.meta.env.VITE_SUPABASE_URL?.match(/https:\/\/(.*?)\.supabase\.co/)?.[1] || ''}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-3 px-4 py-3 text-gray-500 hover:bg-gray-50 hover:text-black rounded-2xl transition-all"
+            >
+              <Database size={18} />
+              <span className="text-sm font-bold">Supabase Dashboard</span>
+            </a>
           </div>
         </div>
 

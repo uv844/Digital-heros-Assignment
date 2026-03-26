@@ -133,6 +133,15 @@ const AdminSettings: React.FC = () => {
                 <span className="font-bold">2 hours ago</span>
               </div>
             </div>
+            <a 
+              href={`https://supabase.com/dashboard/project/${import.meta.env.VITE_SUPABASE_URL?.match(/https:\/\/(.*?)\.supabase\.co/)?.[1] || ''}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-6 w-full flex items-center justify-center space-x-2 py-3 bg-gray-50 text-gray-600 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-black hover:text-white transition-all"
+            >
+              <Database size={14} />
+              <span>Open Supabase Dashboard</span>
+            </a>
           </section>
         </div>
       </div>

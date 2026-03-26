@@ -27,11 +27,20 @@ const Charities: React.FC = () => {
       
       // Merge with mock data to ensure we have images/descriptions if DB is sparse
       const dbCharities = data || [];
-      const merged = [...dbCharities];
       
+      // Use a Map to deduplicate by name to prevent repeats if IDs differ
+      const charityMap = new Map<string, Charity>();
+      
+      // Add DB charities first (they are the source of truth)
+      dbCharities.forEach(c => {
+        charityMap.set(c.name.toLowerCase(), c as Charity);
+      });
+      
+      // Add mock charities only if they don't exist by name
       MOCK_CHARITIES.forEach(mock => {
-        if (!merged.find(c => c.id === mock.id)) {
-          merged.push({
+        const nameKey = mock.name.toLowerCase();
+        if (!charityMap.has(nameKey)) {
+          charityMap.set(nameKey, {
             id: mock.id,
             name: mock.name,
             description: mock.description,
@@ -41,7 +50,7 @@ const Charities: React.FC = () => {
         }
       });
 
-      setCharities(merged);
+      setCharities(Array.from(charityMap.values()));
     } catch (error) {
       console.error('Error fetching charities:', error);
       // Fallback to mock data on error
