@@ -221,34 +221,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    console.log('[Auth] signOut called');
     try {
-      console.log('[Auth] Initiating sign out...');
       setLoading(true);
       
-      // 1. Sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.error('[Auth] Supabase signOut error:', error);
+      // 1. Attempt to notify Supabase, but don't let it block us forever
+      // We use a race to ensure the UI remains responsive even if the network is slow
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sign out timeout')), 1500)
+      );
+      
+      try {
+        await Promise.race([signOutPromise, timeoutPromise]);
+      } catch (e) {
+        console.warn('[Auth] Supabase sign out timed out or failed, proceeding with local clear');
       }
 
-      // 2. Clear local states immediately
+      // 2. Clear all local states immediately
       setUser(null);
       setProfile(null);
+      setFetchingUid(null);
       
-      // 3. Clear storage
+      // 3. Clear all storage types
       localStorage.clear();
       sessionStorage.clear();
       
-      console.log('[Auth] Sign out complete, redirecting...');
+      // 4. Clear all cookies to ensure no stale session fragments remain
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i];
+        const eqPos = cookie.indexOf("=");
+        const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+        document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+      }
+
+      console.log('[Auth] Local state cleared, forcing redirect to login...');
       
-      // 4. Force a hard reload to the home page to clear all memory states
-      window.location.href = '/';
+      // 5. Force a hard reload to the login page to clear all memory states
+      // Using window.location.href is the most reliable way to ensure a "proper logout"
+      window.location.href = '/login';
     } catch (err) {
-      console.error('[Auth] Unexpected error during sign out:', err);
-      // Fallback redirect even on error
-      window.location.href = '/';
-    } finally {
-      setLoading(false);
+      console.error('[Auth] Critical error during sign out:', err);
+      // Fallback redirect to login even on critical error
+      window.location.href = '/login';
     }
   };
 

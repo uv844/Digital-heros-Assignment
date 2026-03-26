@@ -16,7 +16,9 @@ const Profile: React.FC = () => {
     try {
       await signOut();
     } catch (error: any) {
-      toast.error('Logout failed: ' + error.message);
+      console.error('Profile: Logout error:', error);
+      // Fallback redirect to login
+      window.location.href = '/login';
     }
   };
 

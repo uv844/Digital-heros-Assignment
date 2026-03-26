@@ -15,11 +15,10 @@ const Navbar: React.FC = () => {
     try {
       console.log('Navbar: Initiating logout...');
       await signOut();
-      toast.success('Logged out successfully');
     } catch (err) {
       console.error('Navbar: Logout error:', err);
-      // Fallback redirect
-      window.location.href = '/';
+      // Fallback redirect to login
+      window.location.href = '/login';
     }
   };
 
