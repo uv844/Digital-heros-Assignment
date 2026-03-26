@@ -6,11 +6,18 @@ import { User, Mail, Lock, Save, Camera, Shield, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Profile: React.FC = () => {
-  const { user, profile, refreshProfile, signOut } = useAuth();
+  const { user, profile, refreshProfile, updateProfile, signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [displayName, setDisplayName] = useState(profile?.displayName || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Sync displayName when profile loads
+  React.useEffect(() => {
+    if (profile?.displayName) {
+      setDisplayName(profile.displayName);
+    }
+  }, [profile]);
 
   const handleLogout = async () => {
     try {
@@ -27,13 +34,7 @@ const Profile: React.FC = () => {
     if (!user) return;
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ display_name: displayName })
-        .eq('uid', user.id);
-
-      if (error) throw error;
-      await refreshProfile();
+      await updateProfile({ displayName });
       toast.success('Profile updated successfully');
     } catch (error: any) {
       toast.error(error.message);

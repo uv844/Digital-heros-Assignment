@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   refreshProfile: () => Promise<void>;
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isAdmin: false,
   refreshProfile: async () => {},
+  updateProfile: async () => {},
   signOut: async () => {},
 });
 
@@ -26,29 +28,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [fetchingUid, setFetchingUid] = useState<string | null>(null);
+  const fetchingUidRef = React.useRef<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    // Listen for auth changes - this handles INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, etc.
-    // Relying on this instead of manual getSession prevents "Lock was released because another request stole it" errors.
+    // Initial session check
+    const initAuth = async () => {
+      try {
+        console.log('[Auth] Initializing auth session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+
+        if (error) {
+          console.error('[Auth] Error getting initial session:', error);
+          setLoading(false);
+          return;
+        }
+
+        if (session?.user) {
+          console.log('[Auth] Initial session found for:', session.user.id);
+          setUser(session.user);
+          await fetchProfile(session.user.id);
+        } else {
+          console.log('[Auth] No initial session found');
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error('[Auth] Unexpected error during initAuth:', err);
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initAuth();
+
+    // Listen for auth changes - this handles SIGNED_IN, SIGNED_OUT, etc.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('[Auth] State changed:', event, session?.user?.id);
       
       if (!mounted) return;
 
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
+      
+      // Only update user if it actually changed to avoid redundant renders
+      setUser(prev => {
+        if (prev?.id === currentUser?.id) return prev;
+        return currentUser;
+      });
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (currentUser) {
-          console.log('[Auth] User session active, fetching profile...');
+          console.log('[Auth] User signed in/token refreshed, fetching profile...');
           await fetchProfile(currentUser.id);
-        } else {
-          console.log('[Auth] No active session');
-          setProfile(null);
-          setLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('[Auth] User signed out');
@@ -59,11 +91,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (currentUser) {
           await fetchProfile(currentUser.id);
         }
-      } else {
-        // For other events, ensure we aren't stuck in loading
-        if (!currentUser) {
-          setLoading(false);
-        }
       }
     });
 
@@ -73,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.warn('[Auth] Safety timeout reached. Forcing loading to false.');
         setLoading(false);
       }
-    }, 5000);
+    }, 10000);
 
     return () => {
       mounted = false;
@@ -113,7 +140,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, (payload) => {
         console.log('[Auth] Profile changed in real-time:', payload.new);
         if (payload.new) {
-          setProfile(mapProfile(payload.new));
+          // Update profile immediately with payload data for instant UI response
+          const mappedProfile = mapProfile(payload.new);
+          if (mappedProfile.isBlocked) {
+            console.warn('[Auth] User blocked in real-time. Signing out...');
+            signOut();
+          } else {
+            setProfile(mappedProfile);
+          }
         }
       })
       .subscribe();
@@ -124,19 +158,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   const fetchProfile = async (uid: string) => {
+    console.log(`[Auth] fetchProfile called for UID: "${uid}"`);
+    
     if (!uid) {
+      console.warn('[Auth] fetchProfile called with empty UID');
       setLoading(false);
       return;
     }
-
+    
     // Prevent redundant fetches for the same UID if already loading
-    if (fetchingUid === uid) {
+    if (fetchingUidRef.current === uid) {
       console.log('[Auth] Already fetching profile for', uid, 'skipping redundant call');
       return;
     }
-    
-    console.log('[Auth] fetchProfile starting for:', uid);
-    setFetchingUid(uid);
+
+    fetchingUidRef.current = uid;
     setLoading(true);
     
     try {
@@ -146,7 +182,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let error = null;
 
       while (retries > 0) {
-        console.log(`[Auth] Attempting to fetch profile for ${uid}, retries left: ${retries}`);
+        // Check if we are still fetching for the same user
+        if (fetchingUidRef.current !== uid) {
+          console.log('[Auth] Fetching UID changed, aborting current fetch');
+          return;
+        }
+
+        console.log(`[Auth] Attempting fetch for "${uid}" (Attempt ${6-retries}/5)`);
+        
         const result = await supabase
           .from('user_profiles')
           .select('*')
@@ -156,59 +199,91 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         data = result.data;
         error = result.error;
 
-        if (data || (error && error.code !== 'PGRST116')) break;
+        if (error) {
+          console.error(`[Auth] Fetch error for "${uid}":`, error);
+        }
+
+        if (data) {
+          console.log(`[Auth] Profile found for "${uid}":`, data);
+          break;
+        }
         
-        console.log(`[Auth] Profile not found, retrying in 1s...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (retries > 1) {
+          console.log(`[Auth] Profile not found for "${uid}", retrying in 1s...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
         retries--;
       }
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('[Auth] Error fetching profile:', error);
-        setProfile(null);
-      } else if (!data) {
-        console.warn('[Auth] Profile not found after retries. Attempting manual creation...');
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser && authUser.id === uid) {
+      // Final check before state updates
+      if (fetchingUidRef.current !== uid) return;
+
+      if (data) {
+        const mappedProfile = mapProfile(data);
+        if (mappedProfile.isBlocked) {
+          console.warn('[Auth] User is blocked. Signing out...');
+          await signOut();
+        } else {
+          setProfile(mappedProfile);
+        }
+      } else {
+        console.warn('[Auth] Profile not found after all retries. Attempting manual creation...');
+        
+        // Use the user state directly instead of calling getUser() to avoid potential hangs
+        if (user && user.id === uid) {
+          console.log('[Auth] Creating profile manually for:', user.email);
           const { data: newProfile, error: insertError } = await supabase
             .from('user_profiles')
             .insert({
-              uid: authUser.id,
-              email: authUser.email!,
-              display_name: authUser.user_metadata?.display_name || authUser.user_metadata?.full_name || 'Hero',
-              role: authUser.email === 'admin@digitalhero.com' ? 'admin' : 'user',
+              uid: user.id,
+              email: user.email!,
+              display_name: user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')?.[0] || 'Hero',
+              role: user.email === 'admin@digitalhero.com' ? 'admin' : 'user',
               subscription_status: 'inactive',
               total_winnings: 0,
               charity_contribution_percentage: 10
             })
             .select()
-            .single();
+            .maybeSingle();
           
+          if (fetchingUidRef.current !== uid) return;
+
           if (newProfile) {
             console.log('[Auth] Profile created manually:', newProfile);
             setProfile(mapProfile(newProfile));
-          } else {
+          } else if (insertError) {
             console.error('[Auth] Manual profile creation failed:', insertError);
+            
+            // If insert failed because it already exists (conflict), try fetching one last time
+            if (insertError.code === '23505') {
+              console.log('[Auth] Profile already exists (conflict), fetching again...');
+              const { data: finalData } = await supabase
+                .from('user_profiles')
+                .select('*')
+                .eq('uid', uid)
+                .maybeSingle();
+              if (fetchingUidRef.current === uid && finalData) {
+                console.log('[Auth] Final fetch successful after conflict:', finalData);
+                setProfile(mapProfile(finalData));
+              }
+            }
           }
-        }
-      } else {
-        console.log('[Auth] Profile fetched successfully:', data);
-        const mappedProfile = mapProfile(data);
-        if (mappedProfile.isBlocked) {
-          console.warn('[Auth] User is blocked. Signing out...');
-          await supabase.auth.signOut();
-          setUser(null);
-          setProfile(null);
         } else {
-          setProfile(mappedProfile);
+          console.error('[Auth] Cannot create profile: No auth user or UID mismatch', { 
+            hasAuthUser: !!user, 
+            authUid: user?.id, 
+            targetUid: uid 
+          });
         }
       }
     } catch (err) {
-      console.error('[Auth] Unexpected error fetching profile:', err);
+      console.error('[Auth] Unexpected error in fetchProfile:', err);
     } finally {
-      console.log('[Auth] fetchProfile finished, setting loading to false');
-      setLoading(false);
-      setFetchingUid(null);
+      if (fetchingUidRef.current === uid) {
+        console.log('[Auth] fetchProfile finished for', uid);
+        setLoading(false);
+        fetchingUidRef.current = null;
+      }
     }
   };
 
@@ -217,6 +292,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = async () => {
     if (user) {
       await fetchProfile(user.id);
+    }
+  };
+
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    if (!user) return;
+    try {
+      // Map camelCase back to snake_case for Supabase
+      const dbUpdates: any = {};
+      if (updates.displayName !== undefined) dbUpdates.display_name = updates.displayName;
+      if (updates.photoURL !== undefined) dbUpdates.photo_url = updates.photoURL;
+      if (updates.selectedCharityId !== undefined) dbUpdates.selected_charity_id = updates.selectedCharityId;
+      if (updates.charityContributionPercentage !== undefined) dbUpdates.charity_contribution_percentage = updates.charityContributionPercentage;
+      if (updates.subscriptionStatus !== undefined) dbUpdates.subscription_status = updates.subscriptionStatus;
+      if (updates.role !== undefined) dbUpdates.role = updates.role;
+      if (updates.isBlocked !== undefined) dbUpdates.is_blocked = updates.isBlocked;
+
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .update(dbUpdates)
+        .eq('uid', user.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      if (data) setProfile(mapProfile(data));
+    } catch (error) {
+      console.error('[Auth] Error updating profile:', error);
+      throw error;
     }
   };
 
@@ -241,7 +344,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 2. Clear all local states immediately
       setUser(null);
       setProfile(null);
-      setFetchingUid(null);
+      fetchingUidRef.current = null;
       
       // 3. Clear all storage types
       localStorage.clear();
@@ -269,7 +372,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, refreshProfile, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, isAdmin, refreshProfile, updateProfile, signOut }}>
       {children}
     </AuthContext.Provider>
   );

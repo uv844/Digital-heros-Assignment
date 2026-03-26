@@ -16,6 +16,7 @@ import AdminCharities from './pages/AdminCharities';
 import AdminSettings from './pages/AdminSettings';
 import AdminLayout from './components/AdminLayout';
 import Charities from './pages/Charities';
+import CharityProfile from './pages/CharityProfile';
 import HowItWorks from './pages/HowItWorks';
 import Privacy from './pages/Privacy';
 import Terms from './pages/Terms';
@@ -31,11 +32,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       console.log('ProtectedRoute: Auth finished loading, setting local loading to false');
       setLoading(false);
     } else {
-      // Safety timeout: if auth is still loading after 4 seconds, force stop
+      // Safety timeout: if auth is still loading after 10 seconds, force stop
       const timer = setTimeout(() => {
-        console.warn('ProtectedRoute: Auth loading timed out after 4s. Forcing stop.');
+        console.warn('ProtectedRoute: Auth loading timed out after 10s. Forcing stop.');
         setLoading(false);
-      }, 4000);
+      }, 10000);
       return () => clearTimeout(timer);
     }
   }, [authLoading, user]);
@@ -69,11 +70,11 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       console.log('AdminRoute: Auth finished loading, setting local loading to false');
       setLoading(false);
     } else {
-      // Safety timeout: if auth is still loading after 4 seconds, force stop
+      // Safety timeout: if auth is still loading after 10 seconds, force stop
       const timer = setTimeout(() => {
-        console.warn('AdminRoute: Auth loading timed out after 4s. Forcing stop.');
+        console.warn('AdminRoute: Auth loading timed out after 10s. Forcing stop.');
         setLoading(false);
-      }, 4000);
+      }, 10000);
       return () => clearTimeout(timer);
     }
   }, [authLoading, user, isAdmin]);
@@ -133,6 +134,7 @@ export default function App() {
               <Route path="login" element={<Login />} />
               <Route path="signup" element={<Signup />} />
               <Route path="charities" element={<Charities />} />
+              <Route path="charities/:id" element={<CharityProfile />} />
               <Route path="how-it-works" element={<HowItWorks />} />
               <Route path="privacy" element={<Privacy />} />
               <Route path="terms" element={<Terms />} />

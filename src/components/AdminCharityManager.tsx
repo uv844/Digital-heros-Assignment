@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Charity } from '../types';
 import { motion } from 'motion/react';
-import { Plus, Trash2, Edit2, Save, X, Image as ImageIcon, Database } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Image as ImageIcon, Database, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { MOCK_CHARITIES } from '../constants';
+import { Link } from 'react-router-dom';
 
 const AdminCharityManager: React.FC = () => {
   const [charities, setCharities] = useState<Charity[]>([]);
@@ -237,6 +238,13 @@ const AdminCharityManager: React.FC = () => {
                     )}
                   </div>
                   <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-all">
+                    <Link 
+                      to={`/charities/${charity.id}`}
+                      className="p-2 bg-white text-gray-500 hover:text-blue-600 rounded-lg border border-gray-100 hover:border-blue-600 transition-all"
+                      title="View Profile"
+                    >
+                      <ExternalLink size={14} />
+                    </Link>
                     <button 
                       onClick={() => handleEdit(charity)}
                       className="p-2 bg-white text-gray-500 hover:text-black rounded-lg border border-gray-100 hover:border-black transition-all"

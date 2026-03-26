@@ -9,10 +9,17 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 const ScoreEntry: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [scores, setScores] = useState<GolfScore[]>([]);
   const [newScore, setNewScore] = useState<number | string>(36);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user && !profile) {
+      console.log('[ScoreEntry] User present but profile missing, refreshing...');
+      refreshProfile();
+    }
+  }, [user, profile, refreshProfile]);
 
   useEffect(() => {
     if (!user) return;
@@ -93,6 +100,13 @@ const ScoreEntry: React.FC = () => {
 
       if (error) {
         console.error('[ScoreEntry] Insert error:', error);
+        if (error.code === '42501' || error.message?.includes('permission')) {
+          if (!profile) {
+            throw new Error('Your profile is still syncing. Please wait a moment and try again.');
+          } else {
+            throw new Error('Permission denied. Please ensure your account is active.');
+          }
+        }
         throw error;
       }
 

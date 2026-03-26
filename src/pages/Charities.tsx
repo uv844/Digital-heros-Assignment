@@ -1,10 +1,67 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { MOCK_CHARITIES } from '../constants';
-import { Search, Filter, Heart, ArrowRight } from 'lucide-react';
+import { Search, Filter, Heart, ArrowRight, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { Charity } from '../types';
 
 const Charities: React.FC = () => {
+  const [charities, setCharities] = useState<Charity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    fetchCharities();
+  }, []);
+
+  const fetchCharities = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('charities')
+        .select('*')
+        .order('name');
+      
+      if (error) throw error;
+      
+      // Merge with mock data to ensure we have images/descriptions if DB is sparse
+      const dbCharities = data || [];
+      const merged = [...dbCharities];
+      
+      MOCK_CHARITIES.forEach(mock => {
+        if (!merged.find(c => c.id === mock.id)) {
+          merged.push({
+            id: mock.id,
+            name: mock.name,
+            description: mock.description,
+            image_url: mock.imageURL,
+            created_at: new Date().toISOString()
+          } as Charity);
+        }
+      });
+
+      setCharities(merged);
+    } catch (error) {
+      console.error('Error fetching charities:', error);
+      // Fallback to mock data on error
+      setCharities(MOCK_CHARITIES.map(m => ({
+        id: m.id,
+        name: m.name,
+        description: m.description,
+        image_url: m.imageURL,
+        created_at: new Date().toISOString()
+      } as Charity)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredCharities = charities.filter(c => 
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
       <header className="mb-16 text-center max-w-3xl mx-auto">
@@ -26,6 +83,8 @@ const Charities: React.FC = () => {
           <input 
             type="text" 
             placeholder="Search charities..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl focus:ring-2 focus:ring-black transition-all shadow-sm"
           />
         </div>
@@ -37,35 +96,53 @@ const Charities: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {MOCK_CHARITIES.map((charity, i) => (
-          <motion.div 
-            key={charity.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="bg-white rounded-[40px] overflow-hidden shadow-sm hover:shadow-xl transition-all border border-gray-50 flex flex-col"
-          >
-            <div className="aspect-video overflow-hidden">
-              <img src={charity.imageURL} alt={charity.name} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" referrerPolicy="no-referrer" />
-            </div>
-            <div className="p-10 flex-1 flex flex-col">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-2xl font-bold">{charity.name}</h3>
-                <Heart size={20} className="text-gray-200 hover:text-red-500 cursor-pointer transition-colors" />
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-24 space-y-4">
+          <Loader2 className="w-12 h-12 animate-spin text-gray-200" />
+          <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Loading Charities...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredCharities.map((charity, i) => (
+            <motion.div 
+              key={charity.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+              className="bg-white rounded-[40px] overflow-hidden shadow-sm hover:shadow-xl transition-all border border-gray-50 flex flex-col"
+            >
+              <div className="aspect-video overflow-hidden">
+                <img 
+                  src={charity.image_url} 
+                  alt={charity.name} 
+                  className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-500" 
+                  referrerPolicy="no-referrer" 
+                />
               </div>
-              <p className="text-gray-500 text-sm leading-relaxed mb-8 flex-1">{charity.description}</p>
-              
-              <div className="pt-8 border-t border-gray-50">
-                <Link to={`/charities/${charity.id}`} className="w-full py-4 bg-black text-white text-sm font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center justify-center group">
-                  View Profile
-                  <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={16} />
-                </Link>
+              <div className="p-10 flex-1 flex flex-col">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-2xl font-bold">{charity.name}</h3>
+                  <Heart size={20} className="text-gray-200 hover:text-red-500 cursor-pointer transition-colors" />
+                </div>
+                <p className="text-gray-500 text-sm leading-relaxed mb-8 flex-1 line-clamp-3">{charity.description}</p>
+                
+                <div className="pt-8 border-t border-gray-50">
+                  <Link to={`/charities/${charity.id}`} className="w-full py-4 bg-black text-white text-sm font-bold rounded-2xl hover:bg-gray-800 transition-all flex items-center justify-center group">
+                    View Profile
+                    <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={16} />
+                  </Link>
+                </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+      
+      {!loading && filteredCharities.length === 0 && (
+        <div className="text-center py-24">
+          <p className="text-gray-400">No charities found matching your search.</p>
+        </div>
+      )}
     </div>
   );
 };

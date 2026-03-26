@@ -14,7 +14,7 @@ import { SubscriptionStatus } from '../types';
 import confetti from 'canvas-confetti';
 
 const Dashboard: React.FC = () => {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, updateProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showCharityModal, setShowCharityModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -25,12 +25,12 @@ const Dashboard: React.FC = () => {
   const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
-    console.log('[Dashboard] Mounted. Profile:', !!profile, 'User:', !!user);
-    if (user && !profile) {
+    console.log('[Dashboard] Auth state check. Profile:', !!profile, 'User:', !!user);
+    if (user && !profile && !verifying) {
       console.log('[Dashboard] User present but no profile, refreshing...');
       refreshProfile();
     }
-  }, []);
+  }, [user, profile, verifying, refreshProfile]);
 
   useEffect(() => {
     fetchHistory();
@@ -38,7 +38,9 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchCharities();
-    
+  }, []);
+
+  useEffect(() => {
     // Show pricing modal if user just signed up or is inactive and hasn't seen it
     const hasSeenPricing = localStorage.getItem('hasSeenPricing');
     if (profile && profile.subscriptionStatus === SubscriptionStatus.INACTIVE && !hasSeenPricing) {
@@ -145,13 +147,7 @@ const Dashboard: React.FC = () => {
   const handleCharityChange = async (charityId: string) => {
     if (!profile) return;
     try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ selected_charity_id: charityId })
-        .eq('uid', profile.uid);
-
-      if (error) throw error;
-      await refreshProfile();
+      await updateProfile({ selectedCharityId: charityId });
       toast.success('Charity preference updated');
       setShowCharityModal(false);
     } catch (error: any) {
@@ -159,19 +155,28 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const selectedCharity = charities.find(c => c.id === profile?.selectedCharityId) || charities[0] || MOCK_CHARITIES[0];
+  const allCharities = [...charities, ...MOCK_CHARITIES.filter(mc => !charities.find(c => c.id === mc.id))];
+  const selectedCharity = allCharities.find(c => c.id === profile?.selectedCharityId) || allCharities[0] || MOCK_CHARITIES[0];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {!profile && (
-        <div className="mb-8 p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center space-x-3">
-          <div className="p-2 bg-orange-100 text-orange-600 rounded-xl">
-            <UserIcon size={20} />
+        <div className="mb-8 p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-orange-100 text-orange-600 rounded-xl">
+              <UserIcon size={20} />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-orange-800">Profile Syncing</h4>
+              <p className="text-xs text-orange-700">We're setting up your profile. Some features might be limited until this completes.</p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-sm font-bold text-orange-800">Profile Syncing</h4>
-            <p className="text-xs text-orange-700">We're setting up your profile. Some features might be limited until this completes.</p>
-          </div>
+          <button 
+            onClick={() => refreshProfile()}
+            className="px-4 py-2 bg-orange-100 text-orange-700 text-xs font-bold rounded-xl hover:bg-orange-200 transition-all"
+          >
+            Retry Sync
+          </button>
         </div>
       )}
 
