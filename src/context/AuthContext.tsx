@@ -24,11 +24,75 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem('auth_user_cache');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return null;
+  });
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    // Immediate sync from cache on first render
+    try {
+      const cached = localStorage.getItem('auth_profile_cache');
+      if (cached) {
+        console.log('[Auth] Immediate sync: Profile loaded from cache in <1ms');
+        return JSON.parse(cached);
+      }
+    } catch (e) {
+      console.warn('[Auth] Failed to parse cached profile');
+    }
+    return null;
+  });
+  const [loading, setLoading] = useState(() => {
+    // If we have both cached user and profile, we can start with loading=false
+    const hasUser = !!localStorage.getItem('auth_user_cache');
+    const hasProfile = !!localStorage.getItem('auth_profile_cache');
+    return !(hasUser && hasProfile);
+  });
+
+  // Helper to save profile to cache
+  const saveProfileToCache = (p: UserProfile | null) => {
+    if (p) {
+      localStorage.setItem('auth_profile_cache', JSON.stringify(p));
+    } else {
+      localStorage.removeItem('auth_profile_cache');
+    }
+  };
+
+  // Helper to save user to cache
+  const saveUserToCache = (u: User | null) => {
+    if (u) {
+      localStorage.setItem('auth_user_cache', JSON.stringify(u));
+    } else {
+      localStorage.removeItem('auth_user_cache');
+    }
+  };
+
+  // Wrap setProfile to always update cache
+  const updateProfileState = (p: UserProfile | null) => {
+    setProfile(p);
+    saveProfileToCache(p);
+  };
+
+  // Wrap setUser to always update cache
+  const updateUserState = (u: User | null) => {
+    setUser(u);
+    saveUserToCache(u);
+  };
 
   const fetchingUidRef = React.useRef<string | null>(null);
+  const userRef = React.useRef<User | null>(user);
+  const profileRef = React.useRef<UserProfile | null>(profile);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
 
   useEffect(() => {
     let mounted = true;
@@ -49,10 +113,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (session?.user) {
           console.log('[Auth] Initial session found for:', session.user.id);
-          setUser(session.user);
+          updateUserState(session.user);
+          
+          // If we have a cached profile for this user, we can stop loading immediately
+          const cached = localStorage.getItem('auth_profile_cache');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.uid === session.user.id) {
+              console.log('[Auth] Valid cache found, unblocking UI immediately');
+              setLoading(false);
+            }
+          }
+          
           await fetchProfile(session.user.id, session.user);
         } else {
           console.log('[Auth] No initial session found');
+          updateUserState(null);
+          updateProfileState(null);
           setLoading(false);
         }
       } catch (err) {
@@ -72,10 +149,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentUser = session?.user ?? null;
       
       // Only update user if it actually changed to avoid redundant renders
-      setUser(prev => {
-        if (prev?.id === currentUser?.id) return prev;
-        return currentUser;
-      });
+      if (userRef.current?.id !== currentUser?.id) {
+        updateUserState(currentUser);
+      }
 
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (currentUser) {
@@ -84,8 +160,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('[Auth] User signed out');
-        setUser(null);
-        setProfile(null);
+        updateUserState(null);
+        updateProfileState(null);
         setLoading(false);
       } else if (event === 'USER_UPDATED') {
         if (currentUser) {
@@ -126,7 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (!user) {
-      setProfile(null);
+      updateProfileState(null);
       return;
     }
 
@@ -147,7 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('[Auth] User blocked in real-time. Signing out...');
             signOut();
           } else {
-            setProfile(mappedProfile);
+            updateProfileState(mappedProfile);
           }
         }
       })
@@ -190,11 +266,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     fetchingUidRef.current = uid;
-    setLoading(true);
+    
+    // Only set loading to true if we don't have a profile yet
+    // This prevents UI flickering when background refreshing an existing profile
+    if (!profileRef.current) {
+      setLoading(true);
+      
+      // UI Unblocking Safety: 
+      // If profile fetch takes more than 10s, we unblock the UI so the user 
+      // can see the dashboard (which has its own "Syncing" banner).
+      // The retries will continue in the background.
+      setTimeout(() => {
+        if (fetchingUidRef.current === uid && !profileRef.current) {
+          console.log('[Auth] Profile fetch taking longer than 10s, unblocking UI for better UX');
+          setLoading(false);
+        }
+      }, 10000);
+    }
     
     try {
       // Retry logic for profile fetching (useful if trigger is still running)
-      let retries = 5; 
+      // We use shorter timeouts and more frequent retries to be more responsive
+      let retries = 6; 
       let data = null;
       let error = null;
 
@@ -205,7 +298,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        console.log(`[Auth] Attempting fetch for "${uid}" (Attempt ${6-retries}/5)`);
+        console.log(`[Auth] Attempting fetch for "${uid}" (Attempt ${7-retries}/6)`);
         
         try {
           const result = await fetchWithTimeout<{ data: any; error: any }>(
@@ -214,7 +307,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               .select('*')
               .eq('uid', uid)
               .maybeSingle() as any,
-            8000 // Increased timeout to 8s per attempt
+            4000 // Reduced to 4s per attempt for better responsiveness
           );
           
           data = result.data;
@@ -229,13 +322,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             break;
           }
         } catch (attemptErr: any) {
-          console.warn(`[Auth] Attempt ${6-retries} failed or timed out:`, attemptErr.message);
+          console.warn(`[Auth] Attempt ${7-retries} failed or timed out:`, attemptErr.message);
           // Continue to next retry
         }
         
         if (retries > 1) {
-          console.log(`[Auth] Profile not found or attempt failed for "${uid}", retrying in 1.5s...`);
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          console.log(`[Auth] Profile not found or attempt failed for "${uid}", retrying in 1s...`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
         retries--;
       }
@@ -243,7 +336,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Final check before state updates
       if (fetchingUidRef.current !== uid) return;
 
-      const currentUser = authUser || user;
+      const currentUser = authUser || userRef.current;
 
       if (data) {
         const mappedProfile = mapProfile(data);
@@ -253,7 +346,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
         
-        setProfile(mappedProfile);
+        updateProfileState(mappedProfile);
 
         // Sync check: if Auth metadata has info that Profile doesn't, update Profile
         if (currentUser) {
@@ -300,21 +393,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (newProfile) {
             console.log('[Auth] Profile created manually:', newProfile);
-            setProfile(mapProfile(newProfile));
+            updateProfileState(mapProfile(newProfile));
           } else if (insertError) {
             console.error('[Auth] Manual profile creation failed:', insertError);
             
             // If insert failed because it already exists (conflict), try fetching one last time
             if (insertError.code === '23505') {
               console.log('[Auth] Profile already exists (conflict), fetching again...');
-              const { data: finalData } = await supabase
-                .from('user_profiles')
-                .select('*')
-                .eq('uid', uid)
-                .maybeSingle();
-              
-              if (finalData && fetchingUidRef.current === uid) {
-                setProfile(mapProfile(finalData));
+              try {
+                const { data: finalData } = await fetchWithTimeout<{ data: any; error: any }>(
+                  supabase
+                    .from('user_profiles')
+                    .select('*')
+                    .eq('uid', uid)
+                    .maybeSingle() as any,
+                  5000
+                );
+                
+                if (finalData && fetchingUidRef.current === uid) {
+                  updateProfileState(mapProfile(finalData));
+                }
+              } catch (finalErr) {
+                console.error('[Auth] Final fetch after conflict failed:', finalErr);
               }
             }
           }
@@ -346,6 +446,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (force) {
         console.log('[Auth] Manual profile refresh requested (force)');
         fetchingUidRef.current = null;
+        // If forced, we want to show the loading state
+        setLoading(true);
       }
       await fetchProfile(user.id);
     }
@@ -391,7 +493,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       
       if (error) throw error;
-      if (data) setProfile(mapProfile(data));
+      if (data) updateProfileState(mapProfile(data));
     } catch (error) {
       console.error('[Auth] Error updating profile:', error);
       throw error;
@@ -417,8 +519,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 2. Clear all local states immediately
-      setUser(null);
-      setProfile(null);
+      updateUserState(null);
+      updateProfileState(null);
       fetchingUidRef.current = null;
       
       // 3. Clear all storage types
