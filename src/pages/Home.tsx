@@ -131,7 +131,7 @@ const Home: React.FC = () => {
                   <div className="w-10 h-10 bg-gray-200 rounded-full" />
                   <div>
                     <div className="text-xs font-bold">James Wilson</div>
-                    <div className="text-[10px] text-gray-400 uppercase tracking-widest">Subscriber since 2024</div>
+                    <div className="text-[10px] text-gray-400 uppercase tracking-widest">Subscriber since 2025</div>
                   </div>
                 </div>
               </div>

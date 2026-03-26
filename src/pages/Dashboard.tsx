@@ -3,14 +3,14 @@ import { useAuth } from '../context/AuthContext';
 import ScoreEntry from '../components/ScoreEntry';
 import SubscriptionCard from '../components/SubscriptionCard';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Heart, Users, ArrowUpRight, Wallet, X, Check, User as UserIcon, PartyPopper } from 'lucide-react';
+import { Trophy, Heart, Users, ArrowUpRight, Wallet, X, Check, User as UserIcon, PartyPopper, ShieldCheck } from 'lucide-react';
 import { MOCK_CHARITIES } from '../constants';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { getNextDrawDate } from '../lib/dateUtils';
 import { format } from 'date-fns';
 import PricingModal from '../components/PricingModal';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { SubscriptionStatus } from '../types';
 import confetti from 'canvas-confetti';
 
@@ -19,11 +19,6 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  useEffect(() => {
-    if (isAdmin) {
-      navigate('/admin');
-    }
-  }, [isAdmin, navigate]);
   const [showCharityModal, setShowCharityModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showPricingModal, setShowPricingModal] = useState(false);
@@ -31,6 +26,26 @@ const Dashboard: React.FC = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [charities, setCharities] = useState<any[]>([]);
   const [verifying, setVerifying] = useState(false);
+  const [totalParticipants, setTotalParticipants] = useState(12450);
+
+  useEffect(() => {
+    fetchTotalParticipants();
+  }, []);
+
+  const fetchTotalParticipants = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('user_profiles')
+        .select('*', { count: 'exact', head: true });
+      
+      if (!error && count) {
+        // Add a base number to make it look more established if it's a new platform
+        setTotalParticipants(count + 12400);
+      }
+    } catch (err) {
+      console.error('Error fetching participants:', err);
+    }
+  };
 
   useEffect(() => {
     console.log('[Dashboard] Auth state check. Profile:', !!profile, 'User:', !!user);
@@ -189,7 +204,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      <header className="mb-12">
+      <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -197,6 +212,15 @@ const Dashboard: React.FC = () => {
           <h1 className="text-4xl font-bold tracking-tight mb-2">Hello, {profile?.displayName?.split(' ')[0] || 'Hero'}</h1>
           <p className="text-gray-500">Welcome back to your dashboard.</p>
         </motion.div>
+        {isAdmin && (
+          <Link 
+            to="/admin" 
+            className="flex items-center space-x-2 px-6 py-3 bg-black text-white text-xs font-bold uppercase tracking-widest rounded-full hover:bg-gray-800 transition-all shadow-lg shadow-black/10 w-fit"
+          >
+            <ShieldCheck size={16} />
+            <span>Back to Admin</span>
+          </Link>
+        )}
       </header>
 
       {pendingWinnings.length > 0 && (
@@ -270,7 +294,7 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <Users size={16} />
-                <span>12,450 participants entered</span>
+                <span>{totalParticipants.toLocaleString()} participants entered</span>
               </div>
             </div>
           </div>

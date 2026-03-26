@@ -1,24 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { Users, Trophy, Heart, TrendingUp, BarChart3, ChevronRight, Activity, Settings, Database, Loader2, ExternalLink } from 'lucide-react';
+import { Users, Trophy, Heart, TrendingUp, BarChart3, ChevronRight, Activity, Settings, Database, Loader2, ExternalLink, LogOut, RefreshCw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { supabase } from '../lib/supabase';
 import { MOCK_CHARITIES } from '../constants';
 import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
 
 const AdminDashboard: React.FC = () => {
+  const { signOut } = useAuth();
   const [seeding, setSeeding] = useState(false);
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeSubs: 0,
-    charityPool: 0,
-    prizePool: 0
+  const [refreshing, setRefreshing] = useState(false);
+  const [stats, setStats] = useState(() => {
+    const cached = localStorage.getItem('admin_stats_cache');
+    return cached ? JSON.parse(cached) : {
+      totalUsers: 0,
+      activeSubs: 0,
+      charityPool: 0,
+      prizePool: 0
+    };
   });
-  const [charityDistribution, setCharityDistribution] = useState<{ name: string; value: number }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [charityDistribution, setCharityDistribution] = useState<{ name: string; value: number }[]>(() => {
+    const cached = localStorage.getItem('admin_charity_dist_cache');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [recentActivity, setRecentActivity] = useState<{ user: string; action: string; time: string; type: string }[]>(() => {
+    const cached = localStorage.getItem('admin_activity_cache');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [loading, setLoading] = useState(!localStorage.getItem('admin_stats_cache'));
 
-  const [recentActivity, setRecentActivity] = useState<{ user: string; action: string; time: string; type: string }[]>([]);
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success('Logged out successfully');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchStats(), fetchRecentActivity()]);
+    setRefreshing(false);
+    toast.success('Dashboard data refreshed');
+  };
 
   useEffect(() => {
     fetchStats();
@@ -70,7 +97,9 @@ const AdminDashboard: React.FC = () => {
       // Sort combined activity by timestamp
       activity.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-      setRecentActivity(activity.slice(0, 5));
+      const finalActivity = activity.slice(0, 5);
+      setRecentActivity(finalActivity);
+      localStorage.setItem('admin_activity_cache', JSON.stringify(finalActivity));
     } catch (error) {
       console.error('Error fetching recent activity:', error);
     }
@@ -87,7 +116,11 @@ const AdminDashboard: React.FC = () => {
   };
 
   const fetchStats = async () => {
-    setLoading(true);
+    // Don't set loading to true if we have cached data to prevent flickering
+    if (!localStorage.getItem('admin_stats_cache')) {
+      setLoading(true);
+    }
+    
     try {
       // Fetch total users
       const { count: totalUsersCount, error: usersError } = await supabase
@@ -142,13 +175,20 @@ const AdminDashboard: React.FC = () => {
         dist.push({ name: 'Unassigned', value: charityPool - totalAssigned });
       }
 
-      setStats({
+      const finalStats = {
         totalUsers: totalUsersCount || 0,
         activeSubs: activeCount,
         charityPool,
         prizePool
-      });
-      setCharityDistribution(dist.length > 0 ? dist : [{ name: 'No Data', value: 0 }]);
+      };
+      
+      const finalDist = dist.length > 0 ? dist : [{ name: 'No Data', value: 0 }];
+
+      setStats(finalStats);
+      setCharityDistribution(finalDist);
+      
+      localStorage.setItem('admin_stats_cache', JSON.stringify(finalStats));
+      localStorage.setItem('admin_charity_dist_cache', JSON.stringify(finalDist));
     } catch (error: any) {
       console.error('Error fetching stats:', error);
       toast.error('Failed to load real-time statistics');
@@ -191,12 +231,20 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto">
-      <header className="mb-12 flex justify-between items-end">
+      <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h1 className="text-4xl font-bold tracking-tight mb-2">Admin Overview</h1>
           <p className="text-gray-500">Real-time platform performance and activity.</p>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <button 
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center space-x-2 bg-white border border-gray-100 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest hover:border-black transition-all disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
           <button 
             onClick={seedCharities}
             disabled={seeding}
@@ -209,6 +257,13 @@ const AdminDashboard: React.FC = () => {
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
             <span>System Online</span>
           </div>
+          <button 
+            onClick={handleLogout}
+            className="flex items-center space-x-2 bg-red-50 text-red-600 border border-red-100 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all"
+          >
+            <LogOut size={14} />
+            <span>Log Out</span>
+          </button>
         </div>
       </header>
 

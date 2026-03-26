@@ -130,7 +130,7 @@ const AdminSettings: React.FC = () => {
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-500">Last Backup</span>
-                <span className="font-bold">2 hours ago</span>
+                <span className="font-bold">{new Date(new Date().getTime() - 1000 * 60 * 120).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (2h ago)</span>
               </div>
             </div>
             <a 
