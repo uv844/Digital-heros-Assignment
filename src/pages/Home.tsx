@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext';
 
 const Home: React.FC = () => {
   const { user } = useAuth();
-  const startPath = user ? '/dashboard' : '/signup';
 
   return (
     <div className="flex flex-col">
@@ -35,13 +34,22 @@ const Home: React.FC = () => {
               Track your performance, enter monthly draws, and support world-class charities with every subscription.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to={startPath} className="px-8 py-4 bg-black text-white font-bold rounded-full hover:bg-gray-800 transition-all flex items-center group">
-                {user ? 'Go to Dashboard' : 'Get Started'}
-                <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
-              </Link>
-              <Link to="/how-it-works" className="px-8 py-4 bg-white text-black border border-gray-200 font-bold rounded-full hover:border-black transition-all">
-                Learn More
-              </Link>
+              {user ? (
+                <Link to="/dashboard" className="px-8 py-4 bg-black text-white font-bold rounded-full hover:bg-gray-800 transition-all flex items-center group">
+                  Go to Dashboard
+                  <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
+                </Link>
+              ) : (
+                <>
+                  <Link to="/signup" className="px-8 py-4 bg-black text-white font-bold rounded-full hover:bg-gray-800 transition-all flex items-center group">
+                    Join Now
+                    <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
+                  </Link>
+                  <Link to="/login" className="px-8 py-4 bg-white text-black border border-gray-200 font-bold rounded-full hover:border-black transition-all">
+                    Login
+                  </Link>
+                </>
+              )}
             </div>
           </motion.div>
         </div>
@@ -178,9 +186,22 @@ const Home: React.FC = () => {
               <p className="text-gray-400 text-lg mb-12 max-w-xl mx-auto">
                 Join thousands of golfers making a real impact. Choose your plan and start playing for purpose today.
               </p>
-              <Link to={startPath} className="px-12 py-5 bg-white text-black font-bold rounded-full hover:bg-gray-100 transition-all inline-block">
-                {user ? 'Go to Dashboard' : 'Subscribe Now'}
-              </Link>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                {user ? (
+                  <Link to="/dashboard" className="px-12 py-5 bg-white text-black font-bold rounded-full hover:bg-gray-100 transition-all inline-block">
+                    Go to Dashboard
+                  </Link>
+                ) : (
+                  <>
+                    <Link to="/signup" className="px-12 py-5 bg-white text-black font-bold rounded-full hover:bg-gray-100 transition-all inline-block">
+                      Join Now
+                    </Link>
+                    <Link to="/login" className="px-12 py-5 bg-transparent text-white border border-white/20 font-bold rounded-full hover:bg-white/10 transition-all inline-block">
+                      Login
+                    </Link>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

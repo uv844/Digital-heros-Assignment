@@ -14,7 +14,7 @@ import { SubscriptionStatus } from '../types';
 import confetti from 'canvas-confetti';
 
 const Dashboard: React.FC = () => {
-  const { profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showCharityModal, setShowCharityModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -23,6 +23,14 @@ const Dashboard: React.FC = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [charities, setCharities] = useState<any[]>([]);
   const [verifying, setVerifying] = useState(false);
+
+  useEffect(() => {
+    console.log('[Dashboard] Mounted. Profile:', !!profile, 'User:', !!user);
+    if (user && !profile) {
+      console.log('[Dashboard] User present but no profile, refreshing...');
+      refreshProfile();
+    }
+  }, []);
 
   useEffect(() => {
     fetchHistory();

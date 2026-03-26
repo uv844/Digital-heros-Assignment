@@ -9,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   refreshProfile: () => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isAdmin: false,
   refreshProfile: async () => {},
+  signOut: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -29,74 +31,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    const initAuth = async () => {
-      try {
-        console.log('Initializing Auth...');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Session error:', sessionError);
-          if (sessionError.message.includes('Refresh Token Not Found') || sessionError.status === 400) {
-            console.warn('Invalid session detected, clearing local auth...');
-            try {
-              await supabase.auth.signOut();
-            } catch (e) {}
-            localStorage.clear();
-          }
-          if (mounted) setLoading(false);
-          return;
-        }
-
-        if (session?.user) {
-          console.log('Session found for user:', session.user.id);
-          setUser(session.user);
-          await fetchProfile(session.user.id);
-        } else {
-          console.log('No session found');
-          if (mounted) {
-            setUser(null);
-            setProfile(null);
-            setLoading(false);
-          }
-        }
-      } catch (err) {
-        console.error('Auth initialization error:', err);
-        if (mounted) setLoading(false);
-      }
-    };
-
-    initAuth();
-
-    // Listen for auth changes
+    // Listen for auth changes - this handles INITIAL_SESSION, SIGNED_IN, SIGNED_OUT, etc.
+    // Relying on this instead of manual getSession prevents "Lock was released because another request stole it" errors.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id);
-      const currentUser = session?.user ?? null;
+      console.log('[Auth] State changed:', event, session?.user?.id);
       
-      if (mounted) setUser(currentUser);
+      if (!mounted) return;
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         if (currentUser) {
+          console.log('[Auth] User session active, fetching profile...');
           await fetchProfile(currentUser.id);
         } else {
-          if (mounted) setLoading(false);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        if (mounted) {
-          setUser(null);
+          console.log('[Auth] No active session');
           setProfile(null);
           setLoading(false);
         }
+      } else if (event === 'SIGNED_OUT') {
+        console.log('[Auth] User signed out');
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+      } else if (event === 'USER_UPDATED') {
+        if (currentUser) {
+          await fetchProfile(currentUser.id);
+        }
       } else {
-        // For other events, ensure we aren't stuck in loading if no user
-        if (!currentUser && mounted) {
+        // For other events, ensure we aren't stuck in loading
+        if (!currentUser) {
           setLoading(false);
         }
       }
     });
 
+    // Safety timeout to prevent infinite loading if onAuthStateChange fails to fire
+    const safetyTimer = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('[Auth] Safety timeout reached. Forcing loading to false.');
+        setLoading(false);
+      }
+    }, 5000);
+
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      clearTimeout(safetyTimer);
     };
   }, []);
 
@@ -114,6 +96,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isBlocked: data.is_blocked || false,
   });
 
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+
+    // Subscribe to profile changes
+    const channel = supabase
+      .channel(`profile-${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'user_profiles',
+        filter: `uid=eq.${user.id}`
+      }, (payload) => {
+        console.log('[Auth] Profile changed in real-time:', payload.new);
+        if (payload.new) {
+          setProfile(mapProfile(payload.new));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [user]);
+
   const fetchProfile = async (uid: string) => {
     if (!uid) {
       setLoading(false);
@@ -121,24 +130,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Prevent redundant fetches for the same UID if already loading
-    if (fetchingUid === uid && profile) {
-      console.log('Already have profile for', uid, 'skipping fetch');
-      setLoading(false);
+    if (fetchingUid === uid) {
+      console.log('[Auth] Already fetching profile for', uid, 'skipping redundant call');
       return;
     }
     
-    console.log('fetchProfile starting for:', uid);
+    console.log('[Auth] fetchProfile starting for:', uid);
     setFetchingUid(uid);
     setLoading(true);
     
     try {
       // Retry logic for profile fetching (useful if trigger is still running)
-      let retries = 5; // Increased retries
+      let retries = 5; 
       let data = null;
       let error = null;
 
       while (retries > 0) {
-        console.log(`Attempting to fetch profile for ${uid}, retries left: ${retries}`);
+        console.log(`[Auth] Attempting to fetch profile for ${uid}, retries left: ${retries}`);
         const result = await supabase
           .from('user_profiles')
           .select('*')
@@ -150,16 +158,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (data || (error && error.code !== 'PGRST116')) break;
         
-        console.log(`Profile not found, retrying in 1s...`);
+        console.log(`[Auth] Profile not found, retrying in 1s...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
         retries--;
       }
 
       if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error);
+        console.error('[Auth] Error fetching profile:', error);
         setProfile(null);
       } else if (!data) {
-        console.warn('Profile not found after retries. Attempting manual creation...');
+        console.warn('[Auth] Profile not found after retries. Attempting manual creation...');
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser && authUser.id === uid) {
           const { data: newProfile, error: insertError } = await supabase
@@ -177,18 +185,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .single();
           
           if (newProfile) {
-            console.log('Profile created manually:', newProfile);
+            console.log('[Auth] Profile created manually:', newProfile);
             setProfile(mapProfile(newProfile));
           } else {
-            console.error('Manual profile creation failed:', insertError);
-            // Don't set profile to null if we already have one from a previous successful fetch
+            console.error('[Auth] Manual profile creation failed:', insertError);
           }
         }
       } else {
-        console.log('Profile fetched successfully:', data);
+        console.log('[Auth] Profile fetched successfully:', data);
         const mappedProfile = mapProfile(data);
         if (mappedProfile.isBlocked) {
-          console.warn('User is blocked. Signing out...');
+          console.warn('[Auth] User is blocked. Signing out...');
           await supabase.auth.signOut();
           setUser(null);
           setProfile(null);
@@ -197,9 +204,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     } catch (err) {
-      console.error('Unexpected error fetching profile:', err);
+      console.error('[Auth] Unexpected error fetching profile:', err);
     } finally {
-      console.log('fetchProfile finished, setting loading to false');
+      console.log('[Auth] fetchProfile finished, setting loading to false');
       setLoading(false);
       setFetchingUid(null);
     }
@@ -213,8 +220,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signOut = async () => {
+    try {
+      console.log('[Auth] Initiating sign out...');
+      setLoading(true);
+      
+      // 1. Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[Auth] Supabase signOut error:', error);
+      }
+
+      // 2. Clear local states immediately
+      setUser(null);
+      setProfile(null);
+      
+      // 3. Clear storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      console.log('[Auth] Sign out complete, redirecting...');
+      
+      // 4. Force a hard reload to the home page to clear all memory states
+      window.location.href = '/';
+    } catch (err) {
+      console.error('[Auth] Unexpected error during sign out:', err);
+      // Fallback redirect even on error
+      window.location.href = '/';
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, isAdmin, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, isAdmin, refreshProfile, signOut }}>
       {children}
     </AuthContext.Provider>
   );

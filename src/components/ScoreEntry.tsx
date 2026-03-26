@@ -55,43 +55,53 @@ const ScoreEntry: React.FC = () => {
 
   const handleAddScore = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    console.log('[ScoreEntry] handleAddScore triggered. User:', !!user);
+    if (!user) {
+      toast.error('You must be logged in to add a score.');
+      return;
+    }
     
     const scoreVal = typeof newScore === 'string' ? parseInt(newScore) : newScore;
+    console.log('[ScoreEntry] Score value:', scoreVal);
     if (isNaN(scoreVal) || scoreVal < STABLEFORD_MIN || scoreVal > STABLEFORD_MAX) {
       toast.error(`Score must be between ${STABLEFORD_MIN} and ${STABLEFORD_MAX}`);
       return;
     }
 
     setLoading(true);
-    console.log('Attempting to add score:', { uid: user.id, score: scoreVal });
+    console.log('[ScoreEntry] Attempting to add score:', { uid: user.id, score: scoreVal });
 
     try {
       // If we already have 5 scores, delete the oldest one
       if (scores.length >= 5) {
         const oldestScore = scores[scores.length - 1];
+        console.log('[ScoreEntry] Deleting oldest score:', oldestScore.id);
         if (oldestScore.id) {
           const { error: deleteError } = await supabase.from('golf_scores').delete().eq('id', oldestScore.id);
           if (deleteError) {
-            console.error('Error deleting old score:', deleteError);
-            // We continue anyway, as the insert might still work or the user can try again
+            console.error('[ScoreEntry] Error deleting old score:', deleteError);
           }
         }
       }
 
+      console.log('[ScoreEntry] Inserting new score...');
       const { error } = await supabase.from('golf_scores').insert({
         uid: user.id,
         score: scoreVal,
         date: new Date().toISOString(),
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[ScoreEntry] Insert error:', error);
+        throw error;
+      }
 
+      console.log('[ScoreEntry] Score added successfully!');
       toast.success('Score added!');
       setNewScore(36);
       fetchScores();
     } catch (error: any) {
-      console.error('Error adding score:', error);
+      console.error('[ScoreEntry] Error adding score:', error);
       toast.error(error.message || 'Failed to add score. Please check your connection.');
     } finally {
       setLoading(false);

@@ -2,15 +2,23 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { motion } from 'motion/react';
-import { User, Mail, Lock, Save, Camera, Shield } from 'lucide-react';
+import { User, Mail, Lock, Save, Camera, Shield, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Profile: React.FC = () => {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [displayName, setDisplayName] = useState(profile?.displayName || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error: any) {
+      toast.error('Logout failed: ' + error.message);
+    }
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,6 +204,16 @@ const Profile: React.FC = () => {
               <div className="inline-block px-3 py-1 bg-black text-white text-[10px] font-bold rounded-full uppercase tracking-widest">
                 {profile?.role}
               </div>
+            </div>
+
+            <div className="mt-8">
+              <button 
+                onClick={handleLogout}
+                className="w-full py-4 bg-red-50 text-red-600 font-bold rounded-2xl hover:bg-red-100 transition-all flex items-center justify-center group"
+              >
+                <LogOut className="mr-2 group-hover:-translate-x-1 transition-transform" size={18} />
+                Logout
+              </button>
             </div>
           </div>
         </div>
