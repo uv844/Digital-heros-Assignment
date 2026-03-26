@@ -17,8 +17,8 @@ const Navbar: React.FC = () => {
       await signOut();
     } catch (err) {
       console.error('Navbar: Logout error:', err);
-      // Fallback redirect to login
-      window.location.href = '/login';
+      // Fallback redirect to home
+      window.location.href = '/';
     }
   };
 

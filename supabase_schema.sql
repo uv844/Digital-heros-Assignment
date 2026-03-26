@@ -139,12 +139,32 @@ CREATE POLICY "Admins can manage all winners" ON winners
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.user_profiles (uid, email, display_name, role, subscription_status, total_winnings, charity_contribution_percentage)
+  INSERT INTO public.user_profiles (
+    uid, 
+    email, 
+    display_name, 
+    photo_url,
+    role, 
+    subscription_status, 
+    total_winnings, 
+    charity_contribution_percentage
+  )
   VALUES (
     new.id,
     new.email,
-    COALESCE(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'full_name', 'Hero'),
-    CASE WHEN new.email = 'admin@digitalhero.com' THEN 'admin' ELSE 'user' END,
+    COALESCE(
+      new.raw_user_meta_data->>'display_name', 
+      new.raw_user_meta_data->>'full_name', 
+      new.raw_user_meta_data->>'name',
+      split_part(new.email, '@', 1),
+      'Hero'
+    ),
+    COALESCE(
+      new.raw_user_meta_data->>'photo_url',
+      new.raw_user_meta_data->>'avatar_url',
+      new.raw_user_meta_data->>'picture'
+    ),
+    CASE WHEN new.email IN ('admin@digitalhero.com', 'smssmack14@gmail.com') THEN 'admin' ELSE 'user' END,
     'inactive',
     0,
     10

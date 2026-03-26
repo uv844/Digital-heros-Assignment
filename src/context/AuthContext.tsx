@@ -50,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (session?.user) {
           console.log('[Auth] Initial session found for:', session.user.id);
           setUser(session.user);
-          await fetchProfile(session.user.id);
+          await fetchProfile(session.user.id, session.user);
         } else {
           console.log('[Auth] No initial session found');
           setLoading(false);
@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (currentUser) {
           console.log('[Auth] User signed in/token refreshed, fetching profile...');
-          await fetchProfile(currentUser.id);
+          await fetchProfile(currentUser.id, currentUser);
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('[Auth] User signed out');
@@ -89,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       } else if (event === 'USER_UPDATED') {
         if (currentUser) {
-          await fetchProfile(currentUser.id);
+          await fetchProfile(currentUser.id, currentUser);
         }
       }
     });
@@ -157,7 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user]);
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = async (uid: string, authUser?: User) => {
     console.log(`[Auth] fetchProfile called for UID: "${uid}"`);
     
     if (!uid) {
@@ -218,27 +218,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Final check before state updates
       if (fetchingUidRef.current !== uid) return;
 
+      const currentUser = authUser || user;
+
       if (data) {
         const mappedProfile = mapProfile(data);
         if (mappedProfile.isBlocked) {
           console.warn('[Auth] User is blocked. Signing out...');
           await signOut();
-        } else {
-          setProfile(mappedProfile);
+          return;
+        }
+        
+        setProfile(mappedProfile);
+
+        // Sync check: if Auth metadata has info that Profile doesn't, update Profile
+        if (currentUser) {
+          const authName = currentUser.user_metadata?.display_name || currentUser.user_metadata?.full_name || currentUser.user_metadata?.name;
+          const authPhoto = currentUser.user_metadata?.photo_url || currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture;
+          
+          const needsSync = (authName && !mappedProfile.displayName) || (authPhoto && !mappedProfile.photoURL);
+          
+          if (needsSync) {
+            console.log('[Auth] Syncing profile with Auth metadata...');
+            const updates: any = {};
+            if (authName && !mappedProfile.displayName) updates.display_name = authName;
+            if (authPhoto && !mappedProfile.photoURL) updates.photo_url = authPhoto;
+            
+            await supabase.from('user_profiles').update(updates).eq('uid', uid);
+          }
         }
       } else {
         console.warn('[Auth] Profile not found after all retries. Attempting manual creation...');
         
-        // Use the user state directly instead of calling getUser() to avoid potential hangs
-        if (user && user.id === uid) {
-          console.log('[Auth] Creating profile manually for:', user.email);
+        if (currentUser && currentUser.id === uid) {
+          console.log('[Auth] Creating profile manually for:', currentUser.email);
+          const authName = currentUser.user_metadata?.display_name || currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || currentUser.email?.split('@')?.[0] || 'Hero';
+          const authPhoto = currentUser.user_metadata?.photo_url || currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture;
+
           const { data: newProfile, error: insertError } = await supabase
             .from('user_profiles')
             .insert({
-              uid: user.id,
-              email: user.email!,
-              display_name: user.user_metadata?.display_name || user.user_metadata?.full_name || user.email?.split('@')?.[0] || 'Hero',
-              role: user.email === 'admin@digitalhero.com' ? 'admin' : 'user',
+              uid: currentUser.id,
+              email: currentUser.email!,
+              display_name: authName,
+              photo_url: authPhoto,
+              role: currentUser.email === 'admin@digitalhero.com' || currentUser.email === 'smssmack14@gmail.com' ? 'admin' : 'user',
               subscription_status: 'inactive',
               total_winnings: 0,
               charity_contribution_percentage: 10
@@ -262,16 +285,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 .select('*')
                 .eq('uid', uid)
                 .maybeSingle();
-              if (fetchingUidRef.current === uid && finalData) {
-                console.log('[Auth] Final fetch successful after conflict:', finalData);
+              
+              if (finalData && fetchingUidRef.current === uid) {
                 setProfile(mapProfile(finalData));
               }
             }
           }
         } else {
           console.error('[Auth] Cannot create profile: No auth user or UID mismatch', { 
-            hasAuthUser: !!user, 
-            authUid: user?.id, 
+            hasAuthUser: !!currentUser, 
+            authUid: currentUser?.id, 
             targetUid: uid 
           });
         }
@@ -287,7 +310,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isAdmin = profile?.role === UserRole.ADMIN || user?.email === 'admin@digitalhero.com';
+  const isAdmin = profile?.role === UserRole.ADMIN || 
+                  user?.email === 'admin@digitalhero.com' || 
+                  user?.email === 'smssmack14@gmail.com';
 
   const refreshProfile = async () => {
     if (user) {
@@ -300,13 +325,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Map camelCase back to snake_case for Supabase
       const dbUpdates: any = {};
-      if (updates.displayName !== undefined) dbUpdates.display_name = updates.displayName;
-      if (updates.photoURL !== undefined) dbUpdates.photo_url = updates.photoURL;
+      const authUpdates: any = { data: {} };
+      let hasAuthUpdates = false;
+
+      if (updates.displayName !== undefined) {
+        dbUpdates.display_name = updates.displayName;
+        authUpdates.data.display_name = updates.displayName;
+        hasAuthUpdates = true;
+      }
+      if (updates.photoURL !== undefined) {
+        dbUpdates.photo_url = updates.photoURL;
+        authUpdates.data.photo_url = updates.photoURL;
+        hasAuthUpdates = true;
+      }
       if (updates.selectedCharityId !== undefined) dbUpdates.selected_charity_id = updates.selectedCharityId;
       if (updates.charityContributionPercentage !== undefined) dbUpdates.charity_contribution_percentage = updates.charityContributionPercentage;
       if (updates.subscriptionStatus !== undefined) dbUpdates.subscription_status = updates.subscriptionStatus;
       if (updates.role !== undefined) dbUpdates.role = updates.role;
       if (updates.isBlocked !== undefined) dbUpdates.is_blocked = updates.isBlocked;
+
+      // Update Auth metadata if needed
+      if (hasAuthUpdates) {
+        await supabase.auth.updateUser(authUpdates);
+      }
 
       const { data, error } = await supabase
         .from('user_profiles')
@@ -359,15 +400,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
       }
 
-      console.log('[Auth] Local state cleared, forcing redirect to login...');
+      console.log('[Auth] Local state cleared, forcing redirect to home...');
       
-      // 5. Force a hard reload to the login page to clear all memory states
+      // 5. Force a hard reload to the home page to clear all memory states
       // Using window.location.href is the most reliable way to ensure a "proper logout"
-      window.location.href = '/login';
+      window.location.href = '/';
     } catch (err) {
       console.error('[Auth] Critical error during sign out:', err);
-      // Fallback redirect to login even on critical error
-      window.location.href = '/login';
+      // Fallback redirect to home even on critical error
+      window.location.href = '/';
     }
   };
 
