@@ -12,14 +12,18 @@ const Signup: React.FC = () => {
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
-  const { user, loading: authLoading } = useAuth();
+  const { user, isAdmin, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!authLoading && user) {
-      navigate('/dashboard');
+      if (isAdmin) {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, isAdmin, navigate]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +44,7 @@ const Signup: React.FC = () => {
       if (!data.user) throw new Error('No user returned');
 
       toast.success('Account created successfully! Please check your email for verification.');
-      navigate('/dashboard');
+      // Redirection will be handled by useEffect once session is established
     } catch (error: any) {
       toast.error(error.message);
     } finally {

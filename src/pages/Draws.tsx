@@ -115,7 +115,7 @@ const Draws: React.FC = () => {
           </div>
           <h4 className="text-lg font-bold mb-2">Draw Schedule</h4>
           <p className="text-sm text-gray-500 leading-relaxed">
-            Draws take place on the last Friday of every month at 8:00 PM UTC.
+            Draws take place on the first Friday of every month at 8:00 PM UTC.
           </p>
         </div>
         <div className="bg-gray-50 rounded-3xl p-8">

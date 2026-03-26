@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { Play, Send, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getFirstFridayOfMonth } from '../lib/dateUtils';
 
 const AdminDrawManager: React.FC = () => {
   const [draws, setDraws] = useState<Draw[]>([]);
@@ -43,9 +44,10 @@ const AdminDrawManager: React.FC = () => {
     setSimulating(true);
     try {
       const winningNumbers = Array.from({ length: 5 }, () => Math.floor(Math.random() * 45) + 1);
+      const drawDate = getFirstFridayOfMonth(new Date());
       
       const { error } = await supabase.from('draws').insert({
-        date: new Date().toISOString(),
+        date: drawDate.toISOString(),
         winning_numbers: winningNumbers,
         status: DrawStatus.SIMULATED,
         jackpot_amount: 25000,

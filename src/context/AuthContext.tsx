@@ -8,7 +8,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   isAdmin: boolean;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: (force?: boolean) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -99,8 +99,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (mounted && loading) {
         console.warn('[Auth] Safety timeout reached. Forcing loading to false.');
         setLoading(false);
+        fetchingUidRef.current = null;
       }
-    }, 10000);
+    }, 60000); // Increased to 60s to allow for retries
 
     return () => {
       mounted = false;
@@ -157,6 +158,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user]);
 
+  async function fetchWithTimeout<T>(promise: Promise<T>, timeoutMs: number = 5000): Promise<T> {
+    let timeoutId: any;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+    });
+    
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } catch (err) {
+      console.warn('[Auth] Fetch timed out or failed:', err);
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   const fetchProfile = async (uid: string, authUser?: User) => {
     console.log(`[Auth] fetchProfile called for UID: "${uid}"`);
     
@@ -190,27 +207,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         console.log(`[Auth] Attempting fetch for "${uid}" (Attempt ${6-retries}/5)`);
         
-        const result = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('uid', uid)
-          .maybeSingle();
-        
-        data = result.data;
-        error = result.error;
+        try {
+          const result = await fetchWithTimeout<{ data: any; error: any }>(
+            supabase
+              .from('user_profiles')
+              .select('*')
+              .eq('uid', uid)
+              .maybeSingle() as any,
+            8000 // Increased timeout to 8s per attempt
+          );
+          
+          data = result.data;
+          error = result.error;
 
-        if (error) {
-          console.error(`[Auth] Fetch error for "${uid}":`, error);
-        }
+          if (error) {
+            console.error(`[Auth] Fetch error for "${uid}":`, error);
+          }
 
-        if (data) {
-          console.log(`[Auth] Profile found for "${uid}":`, data);
-          break;
+          if (data) {
+            console.log(`[Auth] Profile found for "${uid}":`, data);
+            break;
+          }
+        } catch (attemptErr: any) {
+          console.warn(`[Auth] Attempt ${6-retries} failed or timed out:`, attemptErr.message);
+          // Continue to next retry
         }
         
         if (retries > 1) {
-          console.log(`[Auth] Profile not found for "${uid}", retrying in 1s...`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log(`[Auth] Profile not found or attempt failed for "${uid}", retrying in 1.5s...`);
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
         retries--;
       }
@@ -254,20 +279,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const authName = currentUser.user_metadata?.display_name || currentUser.user_metadata?.full_name || currentUser.user_metadata?.name || currentUser.email?.split('@')?.[0] || 'Hero';
           const authPhoto = currentUser.user_metadata?.photo_url || currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture;
 
-          const { data: newProfile, error: insertError } = await supabase
-            .from('user_profiles')
-            .insert({
-              uid: currentUser.id,
-              email: currentUser.email!,
-              display_name: authName,
-              photo_url: authPhoto,
-              role: currentUser.email === 'admin@digitalhero.com' || currentUser.email === 'smssmack14@gmail.com' ? 'admin' : 'user',
-              subscription_status: 'inactive',
-              total_winnings: 0,
-              charity_contribution_percentage: 10
-            })
-            .select()
-            .maybeSingle();
+          const { data: newProfile, error: insertError } = await fetchWithTimeout<{ data: any; error: any }>(
+            supabase
+              .from('user_profiles')
+              .insert({
+                uid: currentUser.id,
+                email: currentUser.email!,
+                display_name: authName,
+                photo_url: authPhoto,
+                role: currentUser.email === 'admin@digitalhero.com' || currentUser.email === 'smssmack14@gmail.com' ? 'admin' : 'user',
+                subscription_status: 'inactive',
+                total_winnings: 0,
+                charity_contribution_percentage: 10
+              })
+              .select()
+              .maybeSingle() as any
+          );
           
           if (fetchingUidRef.current !== uid) return;
 
@@ -314,8 +341,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   user?.email === 'admin@digitalhero.com' || 
                   user?.email === 'smssmack14@gmail.com';
 
-  const refreshProfile = async () => {
+  const refreshProfile = async (force: boolean = false) => {
     if (user) {
+      if (force) {
+        console.log('[Auth] Manual profile refresh requested (force)');
+        fetchingUidRef.current = null;
+      }
       await fetchProfile(user.id);
     }
   };
@@ -346,15 +377,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Update Auth metadata if needed
       if (hasAuthUpdates) {
-        await supabase.auth.updateUser(authUpdates);
+        await fetchWithTimeout(supabase.auth.updateUser(authUpdates), 10000);
       }
 
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .update(dbUpdates)
-        .eq('uid', user.id)
-        .select()
-        .single();
+      const { data, error } = await fetchWithTimeout<{ data: any; error: any }>(
+        supabase
+          .from('user_profiles')
+          .update(dbUpdates)
+          .eq('uid', user.id)
+          .select()
+          .single() as any,
+        10000
+      );
       
       if (error) throw error;
       if (data) setProfile(mapProfile(data));

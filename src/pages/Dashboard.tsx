@@ -7,15 +7,23 @@ import { Trophy, Heart, Users, ArrowUpRight, Wallet, X, Check, User as UserIcon,
 import { MOCK_CHARITIES } from '../constants';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { getNextDrawDate } from '../lib/dateUtils';
 import { format } from 'date-fns';
 import PricingModal from '../components/PricingModal';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { SubscriptionStatus } from '../types';
 import confetti from 'canvas-confetti';
 
 const Dashboard: React.FC = () => {
-  const { user, profile, refreshProfile, updateProfile } = useAuth();
+  const { user, profile, isAdmin, refreshProfile, updateProfile } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (isAdmin) {
+      navigate('/admin');
+    }
+  }, [isAdmin, navigate]);
   const [showCharityModal, setShowCharityModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showPricingModal, setShowPricingModal] = useState(false);
@@ -155,6 +163,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const nextDrawDate = getNextDrawDate();
   const allCharities = [...charities, ...MOCK_CHARITIES.filter(mc => !charities.find(c => c.id === mc.id))];
   const selectedCharity = allCharities.find(c => c.id === profile?.selectedCharityId) || allCharities[0] || MOCK_CHARITIES[0];
 
@@ -172,7 +181,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <button 
-            onClick={() => refreshProfile()}
+            onClick={() => refreshProfile(true)}
             className="px-4 py-2 bg-orange-100 text-orange-700 text-xs font-bold rounded-xl hover:bg-orange-200 transition-all"
           >
             Retry Sync
@@ -256,7 +265,7 @@ const Dashboard: React.FC = () => {
                 <div className="text-xs font-bold uppercase tracking-widest text-gray-400">Next Draw</div>
               </div>
               <div className="mb-8">
-                <div className="text-2xl font-bold mb-1">April 1st, 2026</div>
+                <div className="text-2xl font-bold mb-1">{format(nextDrawDate, 'MMMM do, yyyy')}</div>
                 <p className="text-gray-500 text-sm">Estimated Jackpot: $25,000</p>
               </div>
               <div className="flex items-center space-x-2 text-sm text-gray-600">
