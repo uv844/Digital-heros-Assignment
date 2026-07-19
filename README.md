@@ -38,7 +38,7 @@ Digital Heroes is a modern, full-stack golf-based charity subscription platform.
 
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone <https://github.com/uv844/Digital-heros-Golf-Charity>
    cd digital-heroes
    ```
 
